@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { RendererCanvas } from '@/three/RendererCanvas';
 import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
-import { useAppStore } from '@/store';
 import { PbrPanel } from '@/ui/PbrPanel';
+import { FormulaHud } from '@/ui/FormulaHud';
 
 export default function App() {
   const module = useMemo(() => new PBRExplainerModule(), []);
@@ -20,6 +20,7 @@ export default function App() {
       <div className="flex flex-1 overflow-hidden">
         <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-panel-light bg-panel p-4">
           <PbrPanel />
+          <FormulaHud />
         </aside>
         <div className="relative flex-1">
           <RendererCanvas module={module} moduleKey="pbr" />
@@ -28,6 +29,3 @@ export default function App() {
     </div>
   );
 }
-
-// Re-export for tests / future modules
-export { useAppStore };
