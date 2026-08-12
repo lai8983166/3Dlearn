@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Cache
+.cache/
+.parcel-cache/
+.vite/
+
+# OS
+.DS_Store
+
+# Local assets downloaded at runtime (HDRI cache etc)
+public/textures/hdri/*.hdr
+public/textures/hdri/*.exr
+
+# Test coverage
+coverage/
+
+# Temp
+*.tmp
+*.bak

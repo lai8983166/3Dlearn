@@ -1,0 +1,34 @@
+schema: spec-driven
+
+context: |
+  项目: 3DLearn — 光学与渲染原理演示器 (Interactive Optics & Shader Explainer)
+  目标用户: 图形学 / 物理初学者、自学者、教学讲师
+  部署形态: 纯 Web，本地 Vite dev server 跑即可，不做 Tauri/Electron 打包
+
+  技术栈:
+    - 渲染: Three.js (最新稳定版，r150+)
+    - 构建: Vite
+    - UI: React 18 + TypeScript
+    - 状态: Zustand（轻量，避免 Redux 样板）
+    - 样式: Tailwind CSS（控制面板快速搭建）
+    - 资源: polyhaven.com 免费 HDRI（运行时按需下载，需明确提醒用户体积）
+
+  教学场景约束:
+    - 所有交互必须能在普通笔记本 GPU（Intel Iris / AMD APU 级别）跑 60fps
+    - UI 文案中英双语，术语统一用英文（如 Roughness / Metalness / Fresnel）
+    - 演示器要有"逐步揭示"特质：学习者可关闭某一层（如 Specular）立即看到差异
+    - 几何光学部分参数必须有可视化数值反馈（焦距 f、物距 u、像距 v、放大率 m）
+
+  代码约定:
+    - 三维场景逻辑放 src/scenes/<module>/，UI 控制面板放 src/ui/
+    - Three.js 对象在 React 外部管理（useThree 此处不强制），通过 useEffect 注入 canvas ref
+    - 物理计算用纯 TS 模块，不耦合渲染层（方便单元测试）
+    - 不要引入 @react-three/fiber —— 用裸 Three.js + React 薄封装，避免抽象层遮挡教学原理
+
+rules:
+  proposal:
+    - "Why 部分必须提到学习者当前无法做到的事（不是技术清单）"
+    - "Non-goals 必须显式列出至少 3 条"
+  tasks:
+    - "单个任务粒度 ≤ 2 小时"
+    - "Phase 之间用 ## 分组，每个 Phase 必须可独立交付演示"
