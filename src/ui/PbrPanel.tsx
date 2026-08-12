@@ -2,6 +2,7 @@ import { useAppStore } from '@/store';
 import { LayerToggle } from './LayerToggle';
 import { Slider } from './Slider';
 import { ColorInput } from './ColorInput';
+import { HdriPicker } from './HdriPicker';
 
 export function PbrPanel() {
   const pbr = useAppStore((s) => s.pbr);
@@ -159,6 +160,8 @@ export function PbrPanel() {
           </p>
         )}
       </section>
+
+      <HdriPicker />
     </>
   );
 }
