@@ -3,9 +3,11 @@ import { RendererCanvas } from '@/three/RendererCanvas';
 import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
 import { OpticsModule } from '@/scenes/optics/OpticsModule';
 import { ShadowModule } from '@/scenes/shadows/ShadowModule';
+import { TextureModule } from '@/scenes/textures/TextureModule';
 import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
 import { ShadowsPanel } from '@/ui/ShadowsPanel';
+import { TexturesPanel } from '@/ui/TexturesPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
@@ -108,11 +110,7 @@ export default function App() {
             )}
             {activeModule === 'optics' && <OpticsPanel />}
             {activeModule === 'shadows' && <ShadowsPanel />}
-            {activeModule === 'textures' && (
-              <div className="rounded bg-panel-light p-3 text-xs text-gray-400">
-                纹理模块将在 Phase 2 接入。
-              </div>
-            )}
+            {activeModule === 'textures' && <TexturesPanel />}
           </aside>
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
@@ -135,6 +133,6 @@ function createModule(id: ModuleId): SceneModule {
     case 'shadows':
       return new ShadowModule();
     case 'textures':
-      throw new Error('textures module not yet implemented');
+      return new TextureModule();
   }
 }

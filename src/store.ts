@@ -11,6 +11,13 @@ export type LightSourceType = 'parallel' | 'point';
 export type ShadowResolution = 256 | 512 | 1024 | 2048;
 export type ShadowPcfMode = 'none' | 'pcf-1' | 'pcf-3' | 'pcf-5';
 
+export type TextureFilterMode =
+  | 'nearest'
+  | 'linear'
+  | 'mipmap-nearest'
+  | 'mipmap-linear';
+export type TextureWrapping = 'repeat' | 'mirror' | 'clamp';
+
 /**
  * Which subsystem currently owns the user's attention. Enforced as a
  * single-writer: when any of these is active, contextual hints stay
@@ -94,11 +101,29 @@ export interface ShadowsState {
   lightPitch: number;
 }
 
+export interface TexturesState {
+  /** Min/mag filter combination. */
+  filterMode: TextureFilterMode;
+  /** Anisotropic filter level (1–maxAnisotropy, capped at runtime). */
+  anisotropy: number;
+  /** UV wrapping mode. */
+  wrapping: TextureWrapping;
+  /** UV tiling (texture.repeat). */
+  tiling: number;
+  /** UV offset (texture.offset). */
+  offset: number;
+  /** Number of checker cells per texture (controls generator). */
+  checkerCells: number;
+  /** Show UV grid overlay on the plane + corner preview. */
+  showUvGrid: boolean;
+}
+
 export interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
   optics: OpticsState;
   shadows: ShadowsState;
+  textures: TexturesState;
 
   /** Which teaching element (if any) currently owns attention. */
   activeInterruption: ActiveInterruption;
@@ -115,6 +140,7 @@ export interface AppState {
   toggleLayer: (layer: keyof PbrState['layers']) => void;
   setOptics: <K extends keyof OpticsState>(key: K, value: OpticsState[K]) => void;
   setShadows: <K extends keyof ShadowsState>(key: K, value: ShadowsState[K]) => void;
+  setTextures: <K extends keyof TexturesState>(key: K, value: TexturesState[K]) => void;
   setHdriStatus: (status: HdriStatus) => void;
 
   setActiveInterruption: (i: ActiveInterruption) => void;
@@ -166,6 +192,15 @@ export const useAppStore = create<AppState>()(
         lightYaw: 35,
         lightPitch: 50,
       },
+      textures: {
+        filterMode: 'mipmap-linear',
+        anisotropy: 1,
+        wrapping: 'repeat',
+        tiling: 1,
+        offset: 0,
+        checkerCells: 8,
+        showUvGrid: false,
+      },
       activeInterruption: { kind: 'none' },
       seenHints: [],
       lastUpdater: 'system',
@@ -197,6 +232,11 @@ export const useAppStore = create<AppState>()(
           shadows: { ...state.shadows, [key]: value },
           lastUpdater: 'user',
         })),
+      setTextures: (key, value) =>
+        set((state) => ({
+          textures: { ...state.textures, [key]: value },
+          lastUpdater: 'user',
+        })),
       setHdriStatus: (status) =>
         set((state) => ({
           pbr: { ...state.pbr, hdriStatus: status },
@@ -222,6 +262,7 @@ export const useAppStore = create<AppState>()(
         pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
         optics: state.optics,
         shadows: state.shadows,
+        textures: state.textures,
         seenHints: state.seenHints,
         // activeInterruption and lastUpdater are runtime-only — never persist.
       }),
