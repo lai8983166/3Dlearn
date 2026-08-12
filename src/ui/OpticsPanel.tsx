@@ -1,5 +1,6 @@
 import { useAppStore, defaultFocalLength } from '@/store';
 import { Slider } from './Slider';
+import { TourDropdown } from './TourDropdown';
 import { computeThinLensImaging } from '@/physics/optics';
 
 export function OpticsPanel() {
@@ -13,6 +14,7 @@ export function OpticsPanel() {
 
   return (
     <>
+      <TourDropdown />
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
           Lens

@@ -78,7 +78,7 @@ export interface OpticsState {
   rayCount: number;
 }
 
-interface AppState {
+export interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
   optics: OpticsState;

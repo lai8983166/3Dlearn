@@ -8,6 +8,7 @@ import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
 import { TourOverlay } from '@/ui/TourOverlay';
+import { HintToast } from '@/ui/Hint';
 import { useAppStore } from '@/store';
 import type { SceneModule } from '@/three/SceneModule';
 import type { ModuleId } from '@/store';
@@ -86,6 +87,7 @@ export default function App() {
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
             <TourOverlay />
+            <HintToast />
           </div>
         </div>
       </div>

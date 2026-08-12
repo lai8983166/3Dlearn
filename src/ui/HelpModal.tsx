@@ -3,9 +3,7 @@ import { useAppStore } from '@/store';
 import { HELP_CONTENT } from './helpContent';
 import { toursForModule } from '@/tours/registry';
 import { tourRunner } from '@/tours/runner';
-
-/** Total number of contextual hints defined in Phase 3. */
-export const TOTAL_HINTS = 5;
+import { TOTAL_HINTS } from '@/hints/definitions';
 
 interface HelpModalProps {
   onClose: () => void;
