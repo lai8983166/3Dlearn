@@ -4,12 +4,14 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { SceneModule } from '@/three/SceneModule';
 import { createLayeredMaterial, applyMaterialParams } from './createLayeredMaterial';
 import { getNormalMap, disposeNormalMaps } from './proceduralNormalMaps';
+import { loadHDRI } from '@/shared/loadHDRI';
 import { useAppStore, type PbrState } from '@/store';
 
 /**
  * The PBR Shader Explainer scene: a single sphere on a neutral background,
  * lit by a key + fill directional light, with RoomEnvironment used as the
- * IBL source. The sphere's material is patched to expose four layer toggles.
+ * default IBL source. The sphere's material is patched to expose four
+ * layer toggles. The user can swap in a downloaded HDRI via the picker UI.
  */
 export class PBRExplainerModule implements SceneModule {
   readonly id = 'pbr';
@@ -21,22 +23,26 @@ export class PBRExplainerModule implements SceneModule {
   private envTexture: THREE.Texture;
   private unsubscribe: () => void;
   private lastPbr: PbrState;
+  /** Bumped on every swap to cancel stale in-flight loads. */
+  private loadGeneration = 0;
 
   constructor() {
     this.camera.position.set(0, 0, 4);
 
-    // Background — neutral dark so layer differences are visible.
     this.scene.background = new THREE.Color('#0f1115');
 
-    // Environment — zero-download RoomEnvironment for the default.
-    const renderer = new THREE.WebGLRenderer(); // temporary, only for PMREM
-    this.pmremGenerator = new THREE.PMREMGenerator(renderer);
+    // PMREM generator lives for the module's lifetime so we can reuse it
+    // for HDRI swaps. The RoomEnvironment default is built from a temp
+    // renderer-independent scene; subsequent fromEquirectangular calls
+    // need the actual renderer (passed via init()).
+    const tmpRenderer = new THREE.WebGLRenderer();
+    this.pmremGenerator = new THREE.PMREMGenerator(tmpRenderer);
     this.envTexture = this.pmremGenerator.fromScene(
       new RoomEnvironment(),
       0.04,
     ).texture;
+    tmpRenderer.dispose();
     this.scene.environment = this.envTexture;
-    renderer.dispose();
 
     // Sphere with layered material.
     const geometry = new THREE.SphereGeometry(1, 64, 64);
@@ -76,12 +82,74 @@ export class PBRExplainerModule implements SceneModule {
     this.scene.add(ground);
 
     this.unsubscribe = useAppStore.subscribe((state) => {
-      if (state.pbr !== this.lastPbr) {
-        this.lastPbr = state.pbr;
-        this.applyState(state.pbr);
+      if (state.pbr === this.lastPbr) return;
+      const hdriChanged = state.pbr.hdriId !== this.lastPbr.hdriId;
+      this.lastPbr = state.pbr;
+      if (hdriChanged) {
+        void this.swapHdri(state.pbr.hdriId);
       }
+      this.applyState(state.pbr);
     });
     this.applyState(initial);
+  }
+
+  /**
+   * Swap the scene's environment map to the requested HDRI id, or back to
+   * the procedural RoomEnvironment when id is null. Disposes the previous
+   * env texture after the swap so GPU memory stays flat across repeated
+   * switches.
+   */
+  private async swapHdri(id: string | null) {
+    const gen = ++this.loadGeneration;
+
+    if (id === null) {
+      const oldEnv = this.envTexture;
+      this.envTexture = this.pmremGenerator.fromScene(
+        new RoomEnvironment(),
+        0.04,
+      ).texture;
+      this.scene.environment = this.envTexture;
+      oldEnv.dispose();
+      useAppStore.getState().setHdriStatus({ state: 'idle' });
+      return;
+    }
+
+    useAppStore.getState().setHdriStatus({
+      state: 'loading',
+      id,
+      receivedBytes: 0,
+      totalBytes: 0,
+    });
+
+    try {
+      const { envTexture } = await loadHDRI(id, this.pmremGenerator, (p) => {
+        if (gen !== this.loadGeneration) return;
+        useAppStore.getState().setHdriStatus({
+          state: 'loading',
+          id,
+          receivedBytes: p.receivedBytes,
+          totalBytes: p.totalBytes,
+        });
+      });
+
+      if (gen !== this.loadGeneration) {
+        // User switched away mid-load. Discard the result without applying.
+        envTexture.dispose();
+        return;
+      }
+
+      const oldEnv = this.envTexture;
+      this.envTexture = envTexture;
+      this.scene.environment = this.envTexture;
+      oldEnv.dispose();
+      useAppStore.getState().setHdriStatus({ state: 'ready', id });
+    } catch (err) {
+      if (gen !== this.loadGeneration) return;
+      const message = err instanceof Error ? err.message : String(err);
+      useAppStore.getState().setHdriStatus({ state: 'error', id, message });
+      // Roll back the requested id so UI stays consistent with what's on canvas.
+      useAppStore.getState().setPbr('hdriId', null);
+    }
   }
 
   private applyState(pbr: PbrState) {
@@ -97,7 +165,6 @@ export class PBRExplainerModule implements SceneModule {
       this.sphere.material = createLayeredMaterial(pbr.specularModel);
     }
 
-    // Normal map preset (cached; cheap to reassign).
     const normalMap = getNormalMap(pbr.normalMapPreset);
     const mat = this.sphere.material as THREE.MeshStandardMaterial;
     if (mat.normalMap !== normalMap) {
@@ -139,6 +206,9 @@ export class PBRExplainerModule implements SceneModule {
   }
 
   dispose() {
+    // Cancel any in-flight load by bumping the generation; the await will
+    // resolve but its result will be discarded.
+    this.loadGeneration++;
     this.unsubscribe();
     this.controls?.dispose();
     this.scene.traverse((obj) => {

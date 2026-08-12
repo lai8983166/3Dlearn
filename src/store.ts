@@ -22,7 +22,22 @@ export interface PbrState {
   specularModel: SpecularModel;
   normalMapPreset: NormalMapPreset;
   shininess: number;
+  /** Currently-selected HDRI id, or null for the procedural RoomEnvironment. */
+  hdriId: string | null;
+  /** Live loading status for the picker UI. */
+  hdriStatus: HdriStatus;
 }
+
+export type HdriStatus =
+  | { state: 'idle' }
+  | {
+      state: 'loading';
+      id: string;
+      receivedBytes: number;
+      totalBytes: number;
+    }
+  | { state: 'ready'; id: string }
+  | { state: 'error'; id: string; message: string };
 
 export interface OpticsState {
   lensType: LensType;
@@ -45,6 +60,7 @@ interface AppState {
   setPbr: <K extends keyof PbrState>(key: K, value: PbrState[K]) => void;
   toggleLayer: (layer: keyof PbrState['layers']) => void;
   setOptics: <K extends keyof OpticsState>(key: K, value: OpticsState[K]) => void;
+  setHdriStatus: (status: HdriStatus) => void;
 }
 
 function defaultFocalLength(lensType: LensType): number {
@@ -71,6 +87,8 @@ export const useAppStore = create<AppState>((set) => ({
     specularModel: 'ggx',
     normalMapPreset: 'bricks',
     shininess: 80,
+    hdriId: null,
+    hdriStatus: { state: 'idle' },
   },
   optics: {
     lensType: 'biconvex',
@@ -92,6 +110,8 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setOptics: (key, value) =>
     set((state) => ({ optics: { ...state.optics, [key]: value } })),
+  setHdriStatus: (status) =>
+    set((state) => ({ pbr: { ...state.pbr, hdriStatus: status } })),
 }));
 
 export { defaultFocalLength };
