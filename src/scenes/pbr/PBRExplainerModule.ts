@@ -25,6 +25,8 @@ export class PBRExplainerModule implements SceneModule {
   private lastPbr: PbrState;
   /** Bumped on every swap to cancel stale in-flight loads. */
   private loadGeneration = 0;
+  /** Set true on dispose() so async load callbacks can bail out cleanly. */
+  private disposed = false;
 
   constructor() {
     this.camera.position.set(0, 0, 4);
@@ -110,6 +112,7 @@ export class PBRExplainerModule implements SceneModule {
       ).texture;
       this.scene.environment = this.envTexture;
       oldEnv.dispose();
+      this.logTextureCount('reverted to RoomEnvironment');
       useAppStore.getState().setHdriStatus({ state: 'idle' });
       return;
     }
@@ -123,7 +126,7 @@ export class PBRExplainerModule implements SceneModule {
 
     try {
       const { envTexture } = await loadHDRI(id, this.pmremGenerator, (p) => {
-        if (gen !== this.loadGeneration) return;
+        if (gen !== this.loadGeneration || this.disposed) return;
         useAppStore.getState().setHdriStatus({
           state: 'loading',
           id,
@@ -132,8 +135,7 @@ export class PBRExplainerModule implements SceneModule {
         });
       });
 
-      if (gen !== this.loadGeneration) {
-        // User switched away mid-load. Discard the result without applying.
+      if (gen !== this.loadGeneration || this.disposed) {
         envTexture.dispose();
         return;
       }
@@ -142,15 +144,32 @@ export class PBRExplainerModule implements SceneModule {
       this.envTexture = envTexture;
       this.scene.environment = this.envTexture;
       oldEnv.dispose();
+      this.logTextureCount(`swapped to ${id}`);
       useAppStore.getState().setHdriStatus({ state: 'ready', id });
     } catch (err) {
-      if (gen !== this.loadGeneration) return;
+      if (gen !== this.loadGeneration || this.disposed) return;
       const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[pbr] HDRI load failed for ${id}:`, message);
       useAppStore.getState().setHdriStatus({ state: 'error', id, message });
-      // Roll back the requested id so UI stays consistent with what's on canvas.
       useAppStore.getState().setPbr('hdriId', null);
     }
   }
+
+  /**
+   * Dev-only diagnostic: surface the renderer's texture-memory counter so
+   * we can verify that repeated HDRI swaps don't leak. In production this
+   * is a no-op.
+   */
+  private logTextureCount(label: string) {
+    if (!import.meta.env.DEV) return;
+    const textures = this.lastRendererInfo?.info.memory.textures;
+    console.log(
+      `[pbr] env ${label} · renderer.info.memory.textures = ${
+        textures ?? '(no renderer yet)'
+      }`,
+    );
+  }
+  private lastRendererInfo: THREE.WebGLRenderer | null = null;
 
   private applyState(pbr: PbrState) {
     const material = this.sphere.material;
@@ -188,6 +207,7 @@ export class PBRExplainerModule implements SceneModule {
   }
 
   init(renderer: THREE.WebGLRenderer) {
+    this.lastRendererInfo = renderer;
     this.controls = new OrbitControls(this.camera, renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
@@ -208,6 +228,7 @@ export class PBRExplainerModule implements SceneModule {
   dispose() {
     // Cancel any in-flight load by bumping the generation; the await will
     // resolve but its result will be discarded.
+    this.disposed = true;
     this.loadGeneration++;
     this.unsubscribe();
     this.controls?.dispose();
