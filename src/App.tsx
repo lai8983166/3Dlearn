@@ -4,10 +4,12 @@ import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
 import { OpticsModule } from '@/scenes/optics/OpticsModule';
 import { ShadowModule } from '@/scenes/shadows/ShadowModule';
 import { TextureModule } from '@/scenes/textures/TextureModule';
+import { TransformModule } from '@/scenes/transforms/TransformModule';
 import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
 import { ShadowsPanel } from '@/ui/ShadowsPanel';
 import { TexturesPanel } from '@/ui/TexturesPanel';
+import { TransformsPanel } from '@/ui/TransformsPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
@@ -75,6 +77,8 @@ export default function App() {
                   ['optics', '光学'],
                   ['shadows', '阴影'],
                   ['textures', '纹理'],
+                  ['transforms', '变换'],
+                  ['colors', '色彩'],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -111,6 +115,12 @@ export default function App() {
             {activeModule === 'optics' && <OpticsPanel />}
             {activeModule === 'shadows' && <ShadowsPanel />}
             {activeModule === 'textures' && <TexturesPanel />}
+            {activeModule === 'transforms' && <TransformsPanel />}
+            {activeModule === 'colors' && (
+              <div className="rounded bg-panel-light p-3 text-xs text-gray-400">
+                色彩模块将在 Phase 2 接入。
+              </div>
+            )}
           </aside>
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
@@ -134,5 +144,9 @@ function createModule(id: ModuleId): SceneModule {
       return new ShadowModule();
     case 'textures':
       return new TextureModule();
+    case 'transforms':
+      return new TransformModule();
+    case 'colors':
+      throw new Error('colors module not yet implemented');
   }
 }

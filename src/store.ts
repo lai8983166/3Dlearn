@@ -3,13 +3,17 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LensType } from '@/physics/optics';
 import type { NarrationState } from '@/tours/types';
 
-export type ModuleId = 'pbr' | 'optics' | 'shadows' | 'textures';
+export type ModuleId = 'pbr' | 'optics' | 'shadows' | 'textures' | 'transforms' | 'colors';
 export type SpecularModel = 'blinn-phong' | 'ggx';
 export type NormalMapPreset = 'smooth' | 'bricks' | 'hammered';
 export type LightSourceType = 'parallel' | 'point';
 
 export type ShadowResolution = 256 | 512 | 1024 | 2048;
 export type ShadowPcfMode = 'none' | 'pcf-1' | 'pcf-3' | 'pcf-5';
+
+export type TransformOrder = 'TRS' | 'TSR' | 'RTS' | 'RST' | 'STR' | 'SRT';
+
+export type ToneMappingType = 'none' | 'reinhard' | 'aces';
 
 export type TextureFilterMode =
   | 'nearest'
@@ -118,12 +122,33 @@ export interface TexturesState {
   showUvGrid: boolean;
 }
 
+export interface TransformsState {
+  translate: [number, number, number];
+  /** Euler angles in degrees (XYZ order). */
+  rotate: [number, number, number];
+  scale: [number, number, number];
+  /** Multiplication order — left-to-right as written. */
+  order: TransformOrder;
+}
+
+export interface ColorsState {
+  toneMapping: ToneMappingType;
+  /** Exposure in stops (-2 to +2). Multiplier = 2^exposure. */
+  exposure: number;
+  /** Apply sRGB OETF on output (renderer.outputColorSpace). */
+  gammaCorrect: boolean;
+  /** Highlight pixels that would be clipped (>1.0 pre-tonemap). */
+  showClipping: boolean;
+}
+
 export interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
   optics: OpticsState;
   shadows: ShadowsState;
   textures: TexturesState;
+  transforms: TransformsState;
+  colors: ColorsState;
 
   /** Which teaching element (if any) currently owns attention. */
   activeInterruption: ActiveInterruption;
@@ -141,6 +166,8 @@ export interface AppState {
   setOptics: <K extends keyof OpticsState>(key: K, value: OpticsState[K]) => void;
   setShadows: <K extends keyof ShadowsState>(key: K, value: ShadowsState[K]) => void;
   setTextures: <K extends keyof TexturesState>(key: K, value: TexturesState[K]) => void;
+  setTransforms: <K extends keyof TransformsState>(key: K, value: TransformsState[K]) => void;
+  setColors: <K extends keyof ColorsState>(key: K, value: ColorsState[K]) => void;
   setHdriStatus: (status: HdriStatus) => void;
 
   setActiveInterruption: (i: ActiveInterruption) => void;
@@ -201,6 +228,18 @@ export const useAppStore = create<AppState>()(
         checkerCells: 8,
         showUvGrid: false,
       },
+      transforms: {
+        translate: [0, 0, 0],
+        rotate: [0, 0, 0],
+        scale: [1, 1, 1],
+        order: 'TRS',
+      },
+      colors: {
+        toneMapping: 'aces',
+        exposure: 0,
+        gammaCorrect: true,
+        showClipping: false,
+      },
       activeInterruption: { kind: 'none' },
       seenHints: [],
       lastUpdater: 'system',
@@ -237,6 +276,16 @@ export const useAppStore = create<AppState>()(
           textures: { ...state.textures, [key]: value },
           lastUpdater: 'user',
         })),
+      setTransforms: (key, value) =>
+        set((state) => ({
+          transforms: { ...state.transforms, [key]: value },
+          lastUpdater: 'user',
+        })),
+      setColors: (key, value) =>
+        set((state) => ({
+          colors: { ...state.colors, [key]: value },
+          lastUpdater: 'user',
+        })),
       setHdriStatus: (status) =>
         set((state) => ({
           pbr: { ...state.pbr, hdriStatus: status },
@@ -256,13 +305,15 @@ export const useAppStore = create<AppState>()(
     {
       name: '3dlearn-store',
       storage: createJSONStorage(() => localStorage),
-      version: 3,
+      version: 4,
       partialize: (state) => ({
         activeModule: state.activeModule,
         pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
         optics: state.optics,
         shadows: state.shadows,
         textures: state.textures,
+        transforms: state.transforms,
+        colors: state.colors,
         seenHints: state.seenHints,
         // activeInterruption and lastUpdater are runtime-only — never persist.
       }),

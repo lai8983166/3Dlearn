@@ -71,4 +71,32 @@ export const HELP_CONTENT: Record<ModuleId, HelpContent> = {
       '开 UV 网格叠加，对照画布左下角的 2D 纹理 + UV 网格理解 3D 表面到 UV 空间的映射。',
     ],
   },
+  transforms: {
+    title: '几何变换拆解',
+    concept:
+      '所有 3D 物体的姿态都由 4×4 齐次坐标矩阵描述。Translate / Rotate / Scale 三种基本变换' +
+      '可以组合，但矩阵乘法不可交换——T·R ≠ R·T。左侧灰色 F 是原始姿态的"鬼影"，右侧' +
+      '亮色 F 实时反映当前组合的矩阵。把矩阵的 16 个数和物体的姿态对应起来，就理解了' +
+      '图形学第一课。',
+    operations: [
+      '拖 Translate X → 看矩阵最后一列第 1 行（m41）跟随变化',
+      '拖 Rotate Y → 看矩阵的 sin/cos 出现在 m11/m13/m31/m33',
+      '拖 Scale Y → 看对角线 m22 变化',
+      '切换 TRS / RTS 等顺序 → 看同一组参数产生不同矩阵和不同姿态',
+      '重置按钮一键回到单位矩阵（原始姿态）',
+    ],
+  },
+  colors: {
+    title: '色彩管线 / Tone Mapping',
+    concept:
+      '真实世界光的强度没有上限（HDR），但显示器只能显示 [0,1]（LDR）。Tone mapping 是' +
+      'HDR → LDR 的映射，决定高光怎么压缩、暗部怎么提亮。sRGB / Linear 是色彩空间' +
+      '的工作流——错误的色彩空间会让暗部发灰、颜色错位。一次对比演示就懂。',
+    operations: [
+      '切 Tone Mapping None → ACES → 看高光从"烧死"变成有细节的过渡',
+      '调 Exposure +1 / -1 stop → 看光线翻倍/减半（类似相机光圈）',
+      '关 Gamma 校正 → 看错误的 Linear 直接输出（整体偏暗、中间调压缩）',
+      '开"显示被 clip 的像素" → 洋红色覆盖任何 >1.0 的 HDR 像素，切 ACES 看它们消失',
+    ],
+  },
 };
