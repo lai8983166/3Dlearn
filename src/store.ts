@@ -2,8 +2,9 @@ import { create } from 'zustand';
 
 export type ModuleId = 'pbr' | 'optics';
 export type SpecularModel = 'blinn-phong' | 'ggx';
+export type NormalMapPreset = 'smooth' | 'bricks' | 'hammered';
 
-interface PbrState {
+export interface PbrState {
   layers: {
     diffuse: boolean;
     specular: boolean;
@@ -17,7 +18,8 @@ interface PbrState {
   roughness: number;
   metalness: number;
   specularModel: SpecularModel;
-  normalMapPreset: 'smooth' | 'bricks' | 'hammered';
+  normalMapPreset: NormalMapPreset;
+  shininess: number;
 }
 
 interface AppState {
@@ -40,6 +42,7 @@ export const useAppStore = create<AppState>((set) => ({
     metalness: 0.0,
     specularModel: 'ggx',
     normalMapPreset: 'bricks',
+    shininess: 80,
   },
   setModule: (id) => set({ activeModule: id }),
   setPbr: (key, value) =>
