@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { RendererCanvas } from '@/three/RendererCanvas';
 import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
 import { useAppStore } from '@/store';
+import { PbrPanel } from '@/ui/PbrPanel';
 
 export default function App() {
   const module = useMemo(() => new PBRExplainerModule(), []);
@@ -13,12 +14,12 @@ export default function App() {
           光学与渲染原理演示器
         </h1>
         <span className="ml-3 text-xs text-gray-400">
-          Interactive Optics & Shader Explainer
+          Interactive Optics & Shader Explainer · PBR Module
         </span>
       </header>
       <div className="flex flex-1 overflow-hidden">
-        <aside className="flex w-72 shrink-0 flex-col gap-4 overflow-y-auto border-r border-panel-light bg-panel p-4">
-          <LayersSection />
+        <aside className="flex w-72 shrink-0 flex-col gap-5 overflow-y-auto border-r border-panel-light bg-panel p-4">
+          <PbrPanel />
         </aside>
         <div className="relative flex-1">
           <RendererCanvas module={module} moduleKey="pbr" />
@@ -28,39 +29,5 @@ export default function App() {
   );
 }
 
-function LayersSection() {
-  const layers = useAppStore((s) => s.pbr.layers);
-  const toggleLayer = useAppStore((s) => s.toggleLayer);
-  return (
-    <section>
-      <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-        Layers
-      </h2>
-      <div className="space-y-2">
-        {(
-          [
-            ['diffuse', 'Diffuse (Lambertian)'],
-            ['specular', 'Specular (highlight)'],
-            ['normal', 'Normal Map'],
-            ['env', 'Env Reflection (Fresnel)'],
-          ] as const
-        ).map(([key, label]) => (
-          <label
-            key={key}
-            className="flex cursor-pointer items-center justify-between rounded bg-panel-light px-3 py-2"
-          >
-            <span className="text-sm">{label}</span>
-            <span className="layer-toggle">
-              <input
-                type="checkbox"
-                checked={layers[key]}
-                onChange={() => toggleLayer(key)}
-              />
-              <span className="slider" />
-            </span>
-          </label>
-        ))}
-      </div>
-    </section>
-  );
-}
+// Re-export for tests / future modules
+export { useAppStore };
