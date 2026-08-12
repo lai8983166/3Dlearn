@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LensType } from '@/physics/optics';
+import type { NarrationState } from '@/tours/types';
 
 export type ModuleId = 'pbr' | 'optics';
 export type SpecularModel = 'blinn-phong' | 'ggx';
@@ -89,6 +90,8 @@ interface AppState {
   /** Who last wrote to the store — used by the tour runner to detect
    *  user interruption. */
   lastUpdater: Updater;
+  /** Live narration for the tour overlay. null when no tour is running. */
+  narration: NarrationState | null;
 
   setModule: (id: ModuleId) => void;
   setPbr: <K extends keyof PbrState>(key: K, value: PbrState[K]) => void;
@@ -141,6 +144,7 @@ export const useAppStore = create<AppState>()(
       activeInterruption: { kind: 'none' },
       seenHints: [],
       lastUpdater: 'system',
+      narration: null,
 
       // Module-level state setters default to 'user' source — the tour
       // runner uses its own setter that tags updates as 'tour'.

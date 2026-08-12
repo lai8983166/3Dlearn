@@ -3,6 +3,7 @@ import { LayerToggle } from './LayerToggle';
 import { Slider } from './Slider';
 import { ColorInput } from './ColorInput';
 import { HdriPicker } from './HdriPicker';
+import { TourDropdown } from './TourDropdown';
 
 export function PbrPanel() {
   const pbr = useAppStore((s) => s.pbr);
@@ -13,6 +14,7 @@ export function PbrPanel() {
 
   return (
     <>
+      <TourDropdown />
       <section>
         <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
           Layers

@@ -7,6 +7,7 @@ import { OpticsPanel } from '@/ui/OpticsPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
+import { TourOverlay } from '@/ui/TourOverlay';
 import { useAppStore } from '@/store';
 import type { SceneModule } from '@/three/SceneModule';
 import type { ModuleId } from '@/store';
@@ -84,6 +85,7 @@ export default function App() {
           </aside>
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
+            <TourOverlay />
           </div>
         </div>
       </div>

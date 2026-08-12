@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store';
 import { HELP_CONTENT } from './helpContent';
+import { toursForModule } from '@/tours/registry';
+import { tourRunner } from '@/tours/runner';
 
 /** Total number of contextual hints defined in Phase 3. */
 export const TOTAL_HINTS = 5;
@@ -132,13 +134,24 @@ export function HelpModal({ onClose }: HelpModalProps) {
         </section>
 
         <section className="mb-5 rounded bg-panel-light/60 p-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-accent-dim">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-accent-dim">
             演示场景
           </h3>
-          <p className="text-xs text-gray-400">
-            一键演示场景将在下一阶段接入。届时这里会列出当前模块的预设场景，
-            点击直接启动。
-          </p>
+          <div className="space-y-1">
+            {toursForModule(activeModule).map((tour) => (
+              <button
+                key={tour.id}
+                onClick={() => {
+                  tourRunner.start(tour);
+                  onClose();
+                }}
+                className="block w-full rounded px-2 py-1.5 text-left transition hover:bg-panel"
+              >
+                <div className="text-sm text-gray-100">▶ {tour.label}</div>
+                <div className="text-[10px] text-gray-500">{tour.description}</div>
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="flex items-center justify-between rounded bg-panel-light/60 p-3">
