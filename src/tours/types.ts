@@ -4,6 +4,8 @@ import type {
   OpticsState,
   ShadowsState,
   TexturesState,
+  TransformsState,
+  ColorsState,
 } from '@/store';
 
 /**
@@ -24,6 +26,11 @@ export interface TourStep {
   shadows?: Partial<ShadowsState>;
   /** Textures state to drive toward. */
   textures?: Partial<TexturesState>;
+  /** Transforms state to drive toward. Tuple fields (translate/rotate/scale)
+   *  are element-wise tweened; order jumps. */
+  transforms?: Partial<TransformsState>;
+  /** Colors state to drive toward. Numeric fields animate; others jump. */
+  colors?: Partial<ColorsState>;
   /** Layer toggles (within pbr.layers) to set. These jump, not animate. */
   layerToggles?: Partial<PbrState['layers']>;
   /** Per-step animation duration (ms). 0 = jump instantly. */

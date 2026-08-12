@@ -4,6 +4,8 @@ import {
   type OpticsState,
   type ShadowsState,
   type TexturesState,
+  type TransformsState,
+  type ColorsState,
 } from '@/store';
 import type { Tour, TourStep, NarrationState } from './types';
 
@@ -16,15 +18,24 @@ interface Snapshot {
   optics: OpticsState;
   shadows: ShadowsState;
   textures: TexturesState;
+  transforms: TransformsState;
+  colors: ColorsState;
 }
 
 function takeSnapshot(): Snapshot {
-  const { pbr, optics, shadows, textures } = useAppStore.getState();
+  const { pbr, optics, shadows, textures, transforms, colors } = useAppStore.getState();
   return {
     pbr: { ...pbr, layers: { ...pbr.layers } },
     optics: { ...optics },
     shadows: { ...shadows },
     textures: { ...textures },
+    transforms: {
+      ...transforms,
+      translate: [transforms.translate[0], transforms.translate[1], transforms.translate[2]],
+      rotate: [transforms.rotate[0], transforms.rotate[1], transforms.rotate[2]],
+      scale: [transforms.scale[0], transforms.scale[1], transforms.scale[2]],
+    },
+    colors: { ...colors },
   };
 }
 
@@ -116,6 +127,8 @@ class TourRunner {
       optics: snap.optics,
       shadows: snap.shadows,
       textures: snap.textures,
+      transforms: snap.transforms,
+      colors: snap.colors,
       lastUpdater: 'tour',
       narration: null,
     });
@@ -224,6 +237,9 @@ type NumericShadowKeys = {
 type NumericTextureKeys = {
   [K in keyof TexturesState]: TexturesState[K] extends number ? K : never;
 }[keyof TexturesState];
+type NumericColorKeys = {
+  [K in keyof ColorsState]: ColorsState[K] extends number ? K : never;
+}[keyof ColorsState];
 
 const NUMERIC_PBR_KEYS: ReadonlySet<NumericPbrKeys> = new Set([
   'diffuseIntensity',
@@ -250,17 +266,45 @@ const NUMERIC_TEXTURE_KEYS: ReadonlySet<NumericTextureKeys> = new Set([
   'offset',
   // checkerCells excluded: integer-only; regenerating texture per-frame is wasteful.
 ]);
+const NUMERIC_COLOR_KEYS: ReadonlySet<NumericColorKeys> = new Set([
+  'exposure',
+]);
+
+/**
+ * Transforms tuple keys. translate/rotate/scale are arrays of three
+ * numbers — we tween each axis independently via element-wise lerp.
+ */
+const TUPLE_TRANSFORM_KEYS: ReadonlySet<'translate' | 'rotate' | 'scale'> = new Set([
+  'translate',
+  'rotate',
+  'scale',
+]);
+
+interface CapturedTupleStart {
+  translate?: [number, number, number];
+  rotate?: [number, number, number];
+  scale?: [number, number, number];
+}
 
 interface CapturedNumericStart {
   pbr: Partial<Record<NumericPbrKeys, number>>;
   optics: Partial<Record<NumericOpticsKeys, number>>;
   shadows: Partial<Record<NumericShadowKeys, number>>;
   textures: Partial<Record<NumericTextureKeys, number>>;
+  colors: Partial<Record<NumericColorKeys, number>>;
+  transformsTuples: CapturedTupleStart;
 }
 
 function captureNumericStart(step: TourStep): CapturedNumericStart {
-  const { pbr, optics, shadows, textures } = useAppStore.getState();
-  const start: CapturedNumericStart = { pbr: {}, optics: {}, shadows: {}, textures: {} };
+  const { pbr, optics, shadows, textures, transforms, colors } = useAppStore.getState();
+  const start: CapturedNumericStart = {
+    pbr: {},
+    optics: {},
+    shadows: {},
+    textures: {},
+    colors: {},
+    transformsTuples: {},
+  };
   if (step.pbr) {
     for (const k of Object.keys(step.pbr) as NumericPbrKeys[]) {
       if (NUMERIC_PBR_KEYS.has(k) && typeof pbr[k] === 'number') {
@@ -286,6 +330,21 @@ function captureNumericStart(step: TourStep): CapturedNumericStart {
     for (const k of Object.keys(step.textures) as NumericTextureKeys[]) {
       if (NUMERIC_TEXTURE_KEYS.has(k) && typeof textures[k] === 'number') {
         start.textures[k] = textures[k] as number;
+      }
+    }
+  }
+  if (step.colors) {
+    for (const k of Object.keys(step.colors) as NumericColorKeys[]) {
+      if (NUMERIC_COLOR_KEYS.has(k) && typeof colors[k] === 'number') {
+        start.colors[k] = colors[k] as number;
+      }
+    }
+  }
+  if (step.transforms) {
+    for (const k of Object.keys(step.transforms) as ('translate' | 'rotate' | 'scale')[]) {
+      if (TUPLE_TRANSFORM_KEYS.has(k)) {
+        const current = transforms[k];
+        start.transformsTuples[k] = [current[0], current[1], current[2]];
       }
     }
   }
@@ -336,11 +395,33 @@ function applyNonNumericTargets(step: TourStep) {
     });
   }
 
+  // Transforms: tuple keys are tweened (handled in applyNumericInterpolated).
+  // `order` and any non-tuple future fields fall through here.
+  const transformsPatch: Partial<TransformsState> = {};
+  if (step.transforms) {
+    (Object.keys(step.transforms) as (keyof TransformsState)[]).forEach((k) => {
+      if (!TUPLE_TRANSFORM_KEYS.has(k as 'translate' | 'rotate' | 'scale')) {
+        (transformsPatch as Record<string, unknown>)[k] = step.transforms![k];
+      }
+    });
+  }
+
+  const colorsPatch: Partial<ColorsState> = {};
+  if (step.colors) {
+    (Object.keys(step.colors) as (keyof ColorsState)[]).forEach((k) => {
+      if (!NUMERIC_COLOR_KEYS.has(k as NumericColorKeys)) {
+        (colorsPatch as Record<string, unknown>)[k] = step.colors![k];
+      }
+    });
+  }
+
   const anyChange =
     Object.keys(pbrPatch).length > 0 ||
     Object.keys(opticsPatch).length > 0 ||
     Object.keys(shadowsPatch).length > 0 ||
-    Object.keys(texturesPatch).length > 0;
+    Object.keys(texturesPatch).length > 0 ||
+    Object.keys(transformsPatch).length > 0 ||
+    Object.keys(colorsPatch).length > 0;
 
   if (anyChange) {
     useAppStore.setState((s) => ({
@@ -348,6 +429,8 @@ function applyNonNumericTargets(step: TourStep) {
       optics: { ...s.optics, ...opticsPatch },
       shadows: { ...s.shadows, ...shadowsPatch },
       textures: { ...s.textures, ...texturesPatch },
+      transforms: { ...s.transforms, ...transformsPatch },
+      colors: { ...s.colors, ...colorsPatch },
       lastUpdater: 'tour',
     }));
   }
@@ -362,10 +445,14 @@ function applyNumericInterpolated(
   let opticsChanged = false;
   let shadowsChanged = false;
   let texturesChanged = false;
+  let colorsChanged = false;
+  let transformsTupleChanged = false;
   const pbrPatch: Partial<PbrState> = {};
   const opticsPatch: Partial<OpticsState> = {};
   const shadowsPatch: Partial<ShadowsState> = {};
   const texturesPatch: Partial<TexturesState> = {};
+  const colorsPatch: Partial<ColorsState> = {};
+  let transformsTuplePatch: Partial<Pick<TransformsState, 'translate' | 'rotate' | 'scale'>> = {};
 
   if (step.pbr) {
     for (const k of Object.keys(step.pbr) as NumericPbrKeys[]) {
@@ -411,13 +498,52 @@ function applyNumericInterpolated(
       texturesChanged = true;
     }
   }
+  if (step.colors) {
+    for (const k of Object.keys(step.colors) as NumericColorKeys[]) {
+      if (!NUMERIC_COLOR_KEYS.has(k)) continue;
+      const targetVal = step.colors[k] as number;
+      const startVal = start.colors[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (colorsPatch as Record<string, unknown>)[k] = v;
+      colorsChanged = true;
+    }
+  }
+  if (step.transforms) {
+    for (const k of Object.keys(step.transforms) as ('translate' | 'rotate' | 'scale')[]) {
+      if (!TUPLE_TRANSFORM_KEYS.has(k)) continue;
+      const target = step.transforms[k];
+      const startTuple = start.transformsTuples[k];
+      if (!startTuple || !Array.isArray(target)) continue;
+      const interp: [number, number, number] = [
+        startTuple[0] + (target[0] - startTuple[0]) * progress,
+        startTuple[1] + (target[1] - startTuple[1]) * progress,
+        startTuple[2] + (target[2] - startTuple[2]) * progress,
+      ];
+      transformsTuplePatch = { ...transformsTuplePatch, [k]: interp };
+      transformsTupleChanged = true;
+    }
+  }
 
-  if (!pbrChanged && !opticsChanged && !shadowsChanged && !texturesChanged) return;
+  if (
+    !pbrChanged &&
+    !opticsChanged &&
+    !shadowsChanged &&
+    !texturesChanged &&
+    !colorsChanged &&
+    !transformsTupleChanged
+  ) {
+    return;
+  }
   useAppStore.setState((s) => ({
     pbr: pbrChanged ? { ...s.pbr, ...pbrPatch } : s.pbr,
     optics: opticsChanged ? { ...s.optics, ...opticsPatch } : s.optics,
     shadows: shadowsChanged ? { ...s.shadows, ...shadowsPatch } : s.shadows,
     textures: texturesChanged ? { ...s.textures, ...texturesPatch } : s.textures,
+    colors: colorsChanged ? { ...s.colors, ...colorsPatch } : s.colors,
+    transforms: transformsTupleChanged
+      ? { ...s.transforms, ...transformsTuplePatch }
+      : s.transforms,
     lastUpdater: 'tour',
   }));
 }
@@ -429,6 +555,8 @@ function applyStepToStore(step: TourStep) {
   const opticsPatch: Partial<OpticsState> = {};
   const shadowsPatch: Partial<ShadowsState> = {};
   const texturesPatch: Partial<TexturesState> = {};
+  const colorsPatch: Partial<ColorsState> = {};
+  const transformsTuplePatch: Partial<TransformsState> = {};
   if (step.pbr) {
     (Object.keys(step.pbr) as NumericPbrKeys[]).forEach((k) => {
       if (NUMERIC_PBR_KEYS.has(k)) {
@@ -457,11 +585,36 @@ function applyStepToStore(step: TourStep) {
       }
     });
   }
+  if (step.colors) {
+    (Object.keys(step.colors) as NumericColorKeys[]).forEach((k) => {
+      if (NUMERIC_COLOR_KEYS.has(k)) {
+        (colorsPatch as Record<string, unknown>)[k] = step.colors![k];
+      }
+    });
+  }
+  if (step.transforms) {
+    (Object.keys(step.transforms) as ('translate' | 'rotate' | 'scale')[]).forEach((k) => {
+      if (TUPLE_TRANSFORM_KEYS.has(k)) {
+        const target = step.transforms![k];
+        if (Array.isArray(target)) {
+          (transformsTuplePatch as Record<string, unknown>)[k] = [
+            target[0],
+            target[1],
+            target[2],
+          ];
+        }
+      }
+    });
+  }
   useAppStore.setState((s) => ({
     pbr: Object.keys(pbrPatch).length ? { ...s.pbr, ...pbrPatch } : s.pbr,
     optics: Object.keys(opticsPatch).length ? { ...s.optics, ...opticsPatch } : s.optics,
     shadows: Object.keys(shadowsPatch).length ? { ...s.shadows, ...shadowsPatch } : s.shadows,
     textures: Object.keys(texturesPatch).length ? { ...s.textures, ...texturesPatch } : s.textures,
+    colors: Object.keys(colorsPatch).length ? { ...s.colors, ...colorsPatch } : s.colors,
+    transforms: Object.keys(transformsTuplePatch).length
+      ? { ...s.transforms, ...transformsTuplePatch }
+      : s.transforms,
     lastUpdater: 'tour',
   }));
 }

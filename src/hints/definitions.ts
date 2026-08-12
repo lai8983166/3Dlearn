@@ -113,6 +113,52 @@ export const HINTS: readonly Hint[] = [
     message:
       'Mirror：相邻 tile 镜像翻转。看红色标记——每两格翻转方向。Mirror 用于避免重复纹理的可见接缝。',
   },
+  {
+    id: 'hint-transform-rotate-90',
+    appliesTo: 'transforms',
+    condition: (s) =>
+      Math.abs(s.transforms.rotate[1] - 90) < 5 + EPS,
+    message:
+      'Rotate Y ≈ 90°：看矩阵的 m11、m13、m31、m33——sin(90°)=1 和 cos(90°)=0 出现了。',
+  },
+  {
+    id: 'hint-transform-order-changed',
+    appliesTo: 'transforms',
+    condition: (s) => s.transforms.order !== 'TRS',
+    message:
+      '顺序变了！同一组 T/R/S 在不同顺序（TRS/RTS/...）下产生完全不同的矩阵和姿态——矩阵乘法不可交换。',
+  },
+  {
+    id: 'hint-transform-scale-negative',
+    appliesTo: 'transforms',
+    condition: (s) =>
+      s.transforms.scale[0] < 0 ||
+      s.transforms.scale[1] < 0 ||
+      s.transforms.scale[2] < 0,
+    message:
+      '负 scale = 镜像翻转！scale=(-1,1,1) 让 F 朝左变成 F 朝右。建模时常用此技巧做对称。',
+  },
+  {
+    id: 'hint-color-no-tonemap',
+    appliesTo: 'colors',
+    condition: (s) => s.colors.toneMapping === 'none',
+    message:
+      'Tone Mapping = None：HDR 像素直接 clip 到 1.0，高光"烧死"。开 clip 可视化看哪些像素被烧。',
+  },
+  {
+    id: 'hint-color-high-exposure',
+    appliesTo: 'colors',
+    condition: (s) => s.colors.exposure > 1.5 - EPS,
+    message:
+      'Exposure > +1.5：大量像素进入 HDR 范围。切到 None tonemap 看烧死，切到 ACES 看柔和压缩。',
+  },
+  {
+    id: 'hint-color-no-gamma',
+    appliesTo: 'colors',
+    condition: (s) => !s.colors.gammaCorrect,
+    message:
+      'Gamma 校正关了：场景变暗、中间调压缩。这是"为什么我的渲染看起来颜色错"的最常见原因。',
+  },
 ];
 
 export const TOTAL_HINTS = HINTS.length;

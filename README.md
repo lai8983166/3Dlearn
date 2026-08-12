@@ -100,6 +100,36 @@ npm test
 - Repeat → Mirror → 相邻 tile 是否翻转
 - 开 UV 网格 → 看到 3D 表面与 2D 纹理空间的映射关系
 
+### 几何变换拆解
+
+左侧灰色"鬼影" F 是原始姿态（永不动），右侧亮色 F 实时跟随 T/R/S 滑杆。底部 4×4 矩阵表格显示当前组合矩阵的 16 个元素，变化的单元格高亮。可调：
+
+- **Translate / Rotate / Scale**：每轴独立滑杆
+- **乘法顺序**：TRS / TSR / RTS / RST / STR / SRT 六种
+- **重置**按钮一键回到单位矩阵
+
+**教学要点验证**：
+- 拖 Translate X → 矩阵 m41（最后一列）跟随
+- 拖 Rotate Y → 矩阵的 sin/cos 出现在 m11/m13/m31/m33
+- Scale X 负值 → 镜像翻转
+- 切换 TRS ↔ RTS（T=(1,0,0), Rz=90°）→ 同参数姿态完全不同（矩阵乘法不可交换）
+
+### 色彩管线 / Tone Mapping
+
+6 个不同 albedo（0.05 – 1.0）的球，被高强度光照推入 HDR 范围。可调：
+
+- **Tone Mapping**：None / Reinhard / ACES Filmic
+- **Exposure**：-2 ~ +2 stops（光线乘 2^x）
+- **Gamma 校正**：开/关（sRGB vs Linear 输出）
+- **显示被 clip 的像素**：洋红色覆盖 >1.0 的 HDR 像素
+
+底部 pipeline 摘要实时更新（如 "Linear scene → ACES tonemap → sRGB output ✓"）。
+
+**教学要点验证**：
+- tonemap=None + exposure=+1 + 开 clip → 大量洋红色（被烧死的像素）
+- 切 ACES → 洋红色消失（高光被柔和压缩）
+- 关 gamma → 整体偏暗（典型的"为什么渲染看起来颜色错"）
+
 ## 架构
 
 ```
@@ -190,7 +220,19 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 - **Anisotropic 提升** — 1 → 16 看斜视角远处清晰度
 - **Wrapping 对比** — Repeat / Mirror / Clamp 在 tiling=4 下
 
-### 11 个上下文提示（精准触发，每个用户最多看一次）
+**变换模块（4 个）**：
+- **平移 → m41** — Translate X 拖动看矩阵最后一列
+- **旋转 → sin/cos** — Rotate Y 到 90° 看矩阵的 sin/cos 出现
+- **缩放 → 对角线** — Scale Y 看矩阵对角线变化
+- **顺序不可交换** — TRS vs RTS 在 T+R 时姿态完全不同
+
+**色彩模块（4 个）**：
+- **为什么需要 Tone Mapping** — 关 tonemap 看高光烧死
+- **ACES vs Reinhard** — 两种 tonemap 的视觉差异
+- **Exposure 调节** — -2 → +1.5 stops 看光线变化
+- **Linear vs sRGB** — 关 gamma 校正看错误输出
+
+### 18 个上下文提示（精准触发，每个用户最多看一次）
 
 走到以下状态时右下角弹 toast：
 
@@ -208,6 +250,12 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 | 纹理过滤 = Mipmap | 远处自动平滑，闪烁消失 |
 | 纹理 Anisotropic ≥ 8 | 斜视角远处不被 Mipmap 过度模糊 |
 | 纹理 wrapping = Mirror | 相邻 tile 翻转方向 |
+| Rotate Y 接近 90° | 矩阵 m11/m13/m31/m33 出现 sin/cos |
+| 变换顺序非 TRS | 同 T/R/S 不同顺序 → 不同矩阵 |
+| 变换 scale 出现负数 | 负 scale = 镜像翻转 |
+| Tone Mapping = None | HDR 像素被 clip 烧死 |
+| Exposure > +1.5 | 大量像素进入 HDR 范围 |
+| 关 Gamma 校正 | 场景变暗、中间调压缩 |
 
 看过的提示会进 localStorage，刷新后不再弹；可在帮助面板"重置提示"。
 

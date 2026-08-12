@@ -4,6 +4,8 @@ import { PBR_TOURS } from './pbrTours';
 import { OPTICS_TOURS } from './opticsTours';
 import { SHADOW_TOURS } from './shadowTours';
 import { TEXTURE_TOURS } from './textureTours';
+import { TRANSFORM_TOURS } from './transformTours';
+import { COLOR_TOURS } from './colorTours';
 
 /**
  * Tour catalog. New tours are registered here so the dropdown and
@@ -14,6 +16,8 @@ export const ALL_TOURS: readonly Tour[] = [
   ...OPTICS_TOURS,
   ...SHADOW_TOURS,
   ...TEXTURE_TOURS,
+  ...TRANSFORM_TOURS,
+  ...COLOR_TOURS,
 ];
 
 export function toursForModule(module: ModuleId): Tour[] {
