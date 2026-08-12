@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import type { SceneModule } from '@/three/SceneModule';
 import { createLayeredMaterial, applyMaterialParams } from './createLayeredMaterial';
+import { getNormalMap, disposeNormalMaps } from './proceduralNormalMaps';
 import { useAppStore, type PbrState } from '@/store';
 
 /**
@@ -96,6 +97,15 @@ export class PBRExplainerModule implements SceneModule {
       this.sphere.material = createLayeredMaterial(pbr.specularModel);
     }
 
+    // Normal map preset (cached; cheap to reassign).
+    const normalMap = getNormalMap(pbr.normalMapPreset);
+    const mat = this.sphere.material as THREE.MeshStandardMaterial;
+    if (mat.normalMap !== normalMap) {
+      mat.normalMap = normalMap;
+      mat.normalScale = new THREE.Vector2(1, 1);
+      mat.needsUpdate = true;
+    }
+
     applyMaterialParams(this.sphere.material, {
       diffuseColor: pbr.diffuseColor,
       diffuseIntensity: pbr.diffuseIntensity,
@@ -141,6 +151,7 @@ export class PBRExplainerModule implements SceneModule {
         }
       }
     });
+    disposeNormalMaps();
     this.envTexture.dispose();
     this.pmremGenerator.dispose();
   }
