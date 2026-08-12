@@ -43,4 +43,32 @@ export const HELP_CONTENT: Record<ModuleId, HelpContent> = {
       '光源可在平行光与点光源（从箭头尖端发射扇形）之间切换。',
     ],
   },
+  shadows: {
+    title: '阴影映射拆解',
+    concept:
+      'Shadow Map 算法两步走：先把场景从光源视角渲染成深度图，再在主相机渲染时' +
+      '比较每个片元的深度。比深度图远的片元在阴影里。这套机制的 4 个经典问题——' +
+      'acne（自阴影条纹）、peter panning（阴影脱离物体）、锯齿、硬边——都可以' +
+      '用 bias、PCF、分辨率三个旋钮调好。本模块让你看到坏掉的样子，再调好。',
+    operations: [
+      '调 bias = 0 看 shadow acne，缓慢加到 0.001–0.003 让它消失，再继续加看 peter panning。',
+      '切换 PCF None ↔ 5×5 看硬阴影到软阴影的过渡。',
+      '切换分辨率 256 ↔ 2048 看阴影边缘锯齿的明显程度。',
+      '调 Pitch = 15° 看长阴影（傍晚效果），并观察此时锯齿更明显（perspective aliasing）。',
+      '画布左下角实时显示 shadow map（光源视角的深度图）。',
+    ],
+  },
+  textures: {
+    title: '纹理与 UV',
+    concept:
+      'UV 坐标把 3D 表面映射到 2D 纹理空间。过滤模式决定采样时如何"混合"相邻像素——' +
+      'Nearest 锐利但锯齿、Linear 平滑、Mipmap 让远处不闪烁、Anisotropic 让斜视角' +
+      '依然清晰。Wrapping 决定 UV 超出 [0,1] 时的行为。',
+    operations: [
+      '切换过滤模式 Nearest ↔ Mipmap Linear，相机斜视角看远处——Mipmap 平滑得多。',
+      '调 Anisotropic 从 1 → 16，斜视角下远处 checker 明显更清晰。',
+      '切 Wrapping Repeat ↔ Mirror 看 tile 朝向是否翻转。',
+      '开 UV 网格叠加，对照画布左下角的 2D 纹理 + UV 网格理解 3D 表面到 UV 空间的映射。',
+    ],
+  },
 };

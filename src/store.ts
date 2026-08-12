@@ -3,10 +3,13 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LensType } from '@/physics/optics';
 import type { NarrationState } from '@/tours/types';
 
-export type ModuleId = 'pbr' | 'optics';
+export type ModuleId = 'pbr' | 'optics' | 'shadows' | 'textures';
 export type SpecularModel = 'blinn-phong' | 'ggx';
 export type NormalMapPreset = 'smooth' | 'bricks' | 'hammered';
 export type LightSourceType = 'parallel' | 'point';
+
+export type ShadowResolution = 256 | 512 | 1024 | 2048;
+export type ShadowPcfMode = 'none' | 'pcf-1' | 'pcf-3' | 'pcf-5';
 
 /**
  * Which subsystem currently owns the user's attention. Enforced as a
@@ -78,10 +81,24 @@ export interface OpticsState {
   rayCount: number;
 }
 
+export interface ShadowsState {
+  /** Shadow map resolution in pixels (square). */
+  resolution: ShadowResolution;
+  /** Depth bias — small values, 0 = acne, too-large = peter panning. */
+  bias: number;
+  /** PCF filtering mode. */
+  pcfMode: ShadowPcfMode;
+  /** Light horizontal angle in degrees (0–360). */
+  lightYaw: number;
+  /** Light vertical angle in degrees (5–85, low = long shadows). */
+  lightPitch: number;
+}
+
 export interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
   optics: OpticsState;
+  shadows: ShadowsState;
 
   /** Which teaching element (if any) currently owns attention. */
   activeInterruption: ActiveInterruption;
@@ -97,6 +114,7 @@ export interface AppState {
   setPbr: <K extends keyof PbrState>(key: K, value: PbrState[K]) => void;
   toggleLayer: (layer: keyof PbrState['layers']) => void;
   setOptics: <K extends keyof OpticsState>(key: K, value: OpticsState[K]) => void;
+  setShadows: <K extends keyof ShadowsState>(key: K, value: ShadowsState[K]) => void;
   setHdriStatus: (status: HdriStatus) => void;
 
   setActiveInterruption: (i: ActiveInterruption) => void;
@@ -141,6 +159,13 @@ export const useAppStore = create<AppState>()(
         lightSourceType: 'parallel',
         rayCount: 7,
       },
+      shadows: {
+        resolution: 1024,
+        bias: 0.0008,
+        pcfMode: 'pcf-3',
+        lightYaw: 35,
+        lightPitch: 50,
+      },
       activeInterruption: { kind: 'none' },
       seenHints: [],
       lastUpdater: 'system',
@@ -167,6 +192,11 @@ export const useAppStore = create<AppState>()(
           optics: { ...state.optics, [key]: value },
           lastUpdater: 'user',
         })),
+      setShadows: (key, value) =>
+        set((state) => ({
+          shadows: { ...state.shadows, [key]: value },
+          lastUpdater: 'user',
+        })),
       setHdriStatus: (status) =>
         set((state) => ({
           pbr: { ...state.pbr, hdriStatus: status },
@@ -186,11 +216,12 @@ export const useAppStore = create<AppState>()(
     {
       name: '3dlearn-store',
       storage: createJSONStorage(() => localStorage),
-      version: 2,
+      version: 3,
       partialize: (state) => ({
         activeModule: state.activeModule,
         pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
         optics: state.optics,
+        shadows: state.shadows,
         seenHints: state.seenHints,
         // activeInterruption and lastUpdater are runtime-only — never persist.
       }),

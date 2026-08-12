@@ -2,8 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { RendererCanvas } from '@/three/RendererCanvas';
 import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
 import { OpticsModule } from '@/scenes/optics/OpticsModule';
+import { ShadowModule } from '@/scenes/shadows/ShadowModule';
 import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
+import { ShadowsPanel } from '@/ui/ShadowsPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
@@ -67,8 +69,10 @@ export default function App() {
             <nav className="flex gap-1 rounded bg-panel-light p-1">
               {(
                 [
-                  ['pbr', 'PBR Shader 拆解器'],
-                  ['optics', '几何光学沙盒'],
+                  ['pbr', 'PBR'],
+                  ['optics', '光学'],
+                  ['shadows', '阴影'],
+                  ['textures', '纹理'],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -96,13 +100,18 @@ export default function App() {
         </header>
         <div className="flex flex-1 overflow-hidden">
           <aside className="flex w-80 shrink-0 flex-col gap-5 overflow-y-auto border-r border-panel-light bg-panel p-4">
-            {activeModule === 'pbr' ? (
+            {activeModule === 'pbr' && (
               <>
                 <PbrPanel />
                 <FormulaHud />
               </>
-            ) : (
-              <OpticsPanel />
+            )}
+            {activeModule === 'optics' && <OpticsPanel />}
+            {activeModule === 'shadows' && <ShadowsPanel />}
+            {activeModule === 'textures' && (
+              <div className="rounded bg-panel-light p-3 text-xs text-gray-400">
+                纹理模块将在 Phase 2 接入。
+              </div>
             )}
           </aside>
           <div className="relative flex-1">
@@ -123,5 +132,9 @@ function createModule(id: ModuleId): SceneModule {
       return new PBRExplainerModule();
     case 'optics':
       return new OpticsModule();
+    case 'shadows':
+      return new ShadowModule();
+    case 'textures':
+      throw new Error('textures module not yet implemented');
   }
 }
