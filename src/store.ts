@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LensType } from '@/physics/optics';
 
 export type ModuleId = 'pbr' | 'optics';
@@ -74,44 +75,61 @@ function defaultFocalLength(lensType: LensType): number {
   }
 }
 
-export const useAppStore = create<AppState>((set) => ({
-  activeModule: 'pbr',
-  pbr: {
-    layers: { diffuse: true, specular: true, normal: false, env: true },
-    diffuseColor: '#b0b0b0',
-    diffuseIntensity: 1.0,
-    specularColor: '#ffffff',
-    specularIntensity: 1.0,
-    roughness: 0.4,
-    metalness: 0.0,
-    specularModel: 'ggx',
-    normalMapPreset: 'bricks',
-    shininess: 80,
-    hdriId: null,
-    hdriStatus: { state: 'idle' },
-  },
-  optics: {
-    lensType: 'biconvex',
-    focalLength: 2.0,
-    objectX: -3.0,
-    objectHeight: 0.8,
-    lightSourceType: 'parallel',
-    rayCount: 7,
-  },
-  setModule: (id) => set({ activeModule: id }),
-  setPbr: (key, value) =>
-    set((state) => ({ pbr: { ...state.pbr, [key]: value } })),
-  toggleLayer: (layer) =>
-    set((state) => ({
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      activeModule: 'pbr',
       pbr: {
-        ...state.pbr,
-        layers: { ...state.pbr.layers, [layer]: !state.pbr.layers[layer] },
+        layers: { diffuse: true, specular: true, normal: false, env: true },
+        diffuseColor: '#b0b0b0',
+        diffuseIntensity: 1.0,
+        specularColor: '#ffffff',
+        specularIntensity: 1.0,
+        roughness: 0.4,
+        metalness: 0.0,
+        specularModel: 'ggx',
+        normalMapPreset: 'bricks',
+        shininess: 80,
+        hdriId: null,
+        hdriStatus: { state: 'idle' },
       },
-    })),
-  setOptics: (key, value) =>
-    set((state) => ({ optics: { ...state.optics, [key]: value } })),
-  setHdriStatus: (status) =>
-    set((state) => ({ pbr: { ...state.pbr, hdriStatus: status } })),
-}));
+      optics: {
+        lensType: 'biconvex',
+        focalLength: 2.0,
+        objectX: -3.0,
+        objectHeight: 0.8,
+        lightSourceType: 'parallel',
+        rayCount: 7,
+      },
+      setModule: (id) => set({ activeModule: id }),
+      setPbr: (key, value) =>
+        set((state) => ({ pbr: { ...state.pbr, [key]: value } })),
+      toggleLayer: (layer) =>
+        set((state) => ({
+          pbr: {
+            ...state.pbr,
+            layers: { ...state.pbr.layers, [layer]: !state.pbr.layers[layer] },
+          },
+        })),
+      setOptics: (key, value) =>
+        set((state) => ({ optics: { ...state.optics, [key]: value } })),
+      setHdriStatus: (status) =>
+        set((state) => ({ pbr: { ...state.pbr, hdriStatus: status } })),
+    }),
+    {
+      name: '3dlearn-store',
+      storage: createJSONStorage(() => localStorage),
+      version: 1,
+      // Persist only data, not transient status. hdriStatus is reset to
+      // idle on every reload so a half-finished download doesn't leave the
+      // picker stuck in a loading state.
+      partialize: (state) => ({
+        activeModule: state.activeModule,
+        pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
+        optics: state.optics,
+      }),
+    },
+  ),
+);
 
 export { defaultFocalLength };
