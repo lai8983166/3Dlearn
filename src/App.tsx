@@ -9,6 +9,8 @@ import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
 import { TourOverlay } from '@/ui/TourOverlay';
 import { HintToast } from '@/ui/Hint';
+import { tourRunner } from '@/tours/runner';
+import { getHintController } from '@/hints/trigger';
 import { useAppStore } from '@/store';
 import type { SceneModule } from '@/three/SceneModule';
 import type { ModuleId } from '@/store';
@@ -29,6 +31,25 @@ export default function App() {
       console.log(`[3DLearn] active module → ${activeModule}`);
     }
   }, [activeModule]);
+
+  // Single Esc handler with priority: help > tour > hint.
+  // Avoids the multiple-handlers-firing problem when several teaching
+  // elements coexist; only the topmost wins.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const kind = useAppStore.getState().activeInterruption.kind;
+      if (kind === 'help') {
+        setHelpOpen(false);
+      } else if (kind === 'tour') {
+        tourRunner.skip();
+      } else if (kind === 'hint') {
+        getHintController().dismiss();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <EnvironmentGuards>

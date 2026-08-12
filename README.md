@@ -123,16 +123,61 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 - [ ] 模块切换：PBR ↔ Optics 连续切 10 次，浏览器 DevTools Performance 无内存增长
 - [ ] 刷新页面：参数（layer toggles、focal length 等）从 localStorage 恢复
 
+## 教学引导
+
+演示器内建**克制的教学引导层**——默认隐藏，关键时刻出现：
+
+### 一键演示场景（顶部"演示场景 ▾"下拉或"?"按钮内）
+
+每个场景是一段脚本：自动调整参数 + 顶部旁白条说明要点 + 跳过按钮。手动操作任意滑杆会立即中断场景。
+
+**PBR 模块（4 个）**：
+- **分层贡献揭示** — 全黑后依次开 4 层，看每一项对最终渲染的贡献
+- **看 Fresnel** — 只留 Diffuse + Env，观察球边缘反射比中心强
+- **GGX vs Blinn-Phong** — 同参数下两种高光模型对比
+- **金属 vs 非金属** — Metalness 0 → 1，看漫反射消失、反射被染色
+
+**光学模块（3 个）**：
+- **薄透镜方程验证** — u=2f → v=2f, m=-1 的等大倒立实像
+- **实像 → 虚像切换** — 5 步动画跨过焦点，看像距跳到无穷再切到虚像
+- **凹透镜发散** — 切凹透镜，平行光经透镜后发散
+
+### 5 个上下文提示（精准触发，每个用户最多看一次）
+
+走到以下状态时右下角弹 toast：
+
+| 触发条件 | 提示要点 |
+|---|---|
+| 物体拖到焦点附近 | 看像距 v 趋向无穷，再拖就切到虚像 |
+| PBR 4 层全关 | 分层让你看清贡献 |
+| Metalness 拉到 1 | 金属：漫反射消失，反射被染色 |
+| 首次切到凹透镜 | f < 0，平行光发散 |
+| 首次切到 Blinn-Phong | 经典模型，无能量守恒 |
+
+看过的提示会进 localStorage，刷新后不再弹；可在帮助面板"重置提示"。
+
+### 帮助面板（右上角"?"按钮）
+
+按模块动态显示：核心概念、操作指南、演示场景入口、提示计数与重置。
+
 ## 项目规划
 
 本项目用 [OpenSpec](https://github.com/fission-ai/openspec) 规划。规划文档在 `openspec/`：
 
 ```
-openspec/changes/add-optics-shader-explainer/
-├── proposal.md         动机、目标、Non-goals
-├── design.md           6 个关键架构决策 + 风险/权衡
-├── tasks.md            4 个 Phase 的实施清单
-└── specs/              4 个 capability 的可验收规格（WHEN/THEN）
+openspec/specs/                          已完成并归档的 capability
+├── asset-pipeline/spec.md               HDRI 加载
+├── optics-simulation/spec.md            光学沙盒
+├── pbr-layer-explainer/spec.md          PBR 分层
+└── scene-shell/spec.md                  应用外壳
+
+openspec/changes/
+├── archive/2026-08-12-add-optics-shader-explainer/   已归档：PBR + 光学 + HDRI
+└── add-guided-learning/                               当前：教学引导层
+    ├── proposal.md         动机、目标、Non-goals
+    ├── design.md           注意力管理策略 + 6 个关键决策
+    ├── tasks.md            4 个 Phase 的实施清单
+    └── specs/              3 个 capability（tours / hints / help）
 ```
 
 实施过程中的一些偏离（已记录在 commit message 中）：
@@ -140,3 +185,4 @@ openspec/changes/add-optics-shader-explainer/
 - 公式 HUD 用 Unicode + 等宽字体而非 KaTeX（省 250 KB）
 - 单元测试用 Node 内置 `--experimental-strip-types` 而非 vitest（省 50 MB）
 - HDRI 实际体积 1–1.5 MB（远小于预估的 5–20 MB）
+- 演示场景不动画相机（OrbitControls 是模块私有的），改为设置参数让学习者自己拖

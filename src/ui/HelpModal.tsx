@@ -34,35 +34,30 @@ export function HelpModal({ onClose }: HelpModalProps) {
     closeButtonRef.current?.focus();
   }, []);
 
-  // Esc to close + focus trap.
+  // Tab focus trap. Esc is handled by App's top-level handler to keep
+  // priority logic in one place (help > tour > hint).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Tab') return;
+      const container = containerRef.current;
+      if (!container) return;
+      const focusable = container.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
         e.preventDefault();
-        onClose();
-        return;
-      }
-      if (e.key === 'Tab') {
-        const container = containerRef.current;
-        if (!container) return;
-        const focusable = container.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        if (focusable.length === 0) return;
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
 
   // Mark modal as the active interruption while open so contextual
   // hints don't fire during help reading.
