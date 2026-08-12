@@ -1,4 +1,10 @@
-import type { ModuleId, PbrState, OpticsState } from '@/store';
+import type {
+  ModuleId,
+  PbrState,
+  OpticsState,
+  ShadowsState,
+  TexturesState,
+} from '@/store';
 
 /**
  * One step of a guided tour. The runner tweens (for numeric fields) or
@@ -14,6 +20,10 @@ export interface TourStep {
   pbr?: Partial<PbrState>;
   /** Optics state to drive toward. */
   optics?: Partial<OpticsState>;
+  /** Shadows state to drive toward. */
+  shadows?: Partial<ShadowsState>;
+  /** Textures state to drive toward. */
+  textures?: Partial<TexturesState>;
   /** Layer toggles (within pbr.layers) to set. These jump, not animate. */
   layerToggles?: Partial<PbrState['layers']>;
   /** Per-step animation duration (ms). 0 = jump instantly. */

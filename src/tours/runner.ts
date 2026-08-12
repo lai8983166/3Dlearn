@@ -1,4 +1,10 @@
-import { useAppStore, type PbrState, type OpticsState } from '@/store';
+import {
+  useAppStore,
+  type PbrState,
+  type OpticsState,
+  type ShadowsState,
+  type TexturesState,
+} from '@/store';
 import type { Tour, TourStep, NarrationState } from './types';
 
 /**
@@ -8,13 +14,17 @@ import type { Tour, TourStep, NarrationState } from './types';
 interface Snapshot {
   pbr: PbrState;
   optics: OpticsState;
+  shadows: ShadowsState;
+  textures: TexturesState;
 }
 
 function takeSnapshot(): Snapshot {
-  const { pbr, optics } = useAppStore.getState();
+  const { pbr, optics, shadows, textures } = useAppStore.getState();
   return {
     pbr: { ...pbr, layers: { ...pbr.layers } },
     optics: { ...optics },
+    shadows: { ...shadows },
+    textures: { ...textures },
   };
 }
 
@@ -104,6 +114,8 @@ class TourRunner {
     useAppStore.setState({
       pbr: snap.pbr,
       optics: snap.optics,
+      shadows: snap.shadows,
+      textures: snap.textures,
       lastUpdater: 'tour',
       narration: null,
     });
@@ -206,6 +218,12 @@ type NumericPbrKeys = {
 type NumericOpticsKeys = {
   [K in keyof OpticsState]: OpticsState[K] extends number ? K : never;
 }[keyof OpticsState];
+type NumericShadowKeys = {
+  [K in keyof ShadowsState]: ShadowsState[K] extends number ? K : never;
+}[keyof ShadowsState];
+type NumericTextureKeys = {
+  [K in keyof TexturesState]: TexturesState[K] extends number ? K : never;
+}[keyof TexturesState];
 
 const NUMERIC_PBR_KEYS: ReadonlySet<NumericPbrKeys> = new Set([
   'diffuseIntensity',
@@ -220,15 +238,29 @@ const NUMERIC_OPTICS_KEYS: ReadonlySet<NumericOpticsKeys> = new Set([
   'objectHeight',
   'rayCount',
 ]);
+const NUMERIC_SHADOW_KEYS: ReadonlySet<NumericShadowKeys> = new Set([
+  'bias',
+  'lightYaw',
+  'lightPitch',
+  // resolution excluded: animating 256→2048 generates illegal intermediate sizes.
+]);
+const NUMERIC_TEXTURE_KEYS: ReadonlySet<NumericTextureKeys> = new Set([
+  'anisotropy',
+  'tiling',
+  'offset',
+  // checkerCells excluded: integer-only; regenerating texture per-frame is wasteful.
+]);
 
 interface CapturedNumericStart {
   pbr: Partial<Record<NumericPbrKeys, number>>;
   optics: Partial<Record<NumericOpticsKeys, number>>;
+  shadows: Partial<Record<NumericShadowKeys, number>>;
+  textures: Partial<Record<NumericTextureKeys, number>>;
 }
 
 function captureNumericStart(step: TourStep): CapturedNumericStart {
-  const { pbr, optics } = useAppStore.getState();
-  const start: CapturedNumericStart = { pbr: {}, optics: {} };
+  const { pbr, optics, shadows, textures } = useAppStore.getState();
+  const start: CapturedNumericStart = { pbr: {}, optics: {}, shadows: {}, textures: {} };
   if (step.pbr) {
     for (const k of Object.keys(step.pbr) as NumericPbrKeys[]) {
       if (NUMERIC_PBR_KEYS.has(k) && typeof pbr[k] === 'number') {
@@ -240,6 +272,20 @@ function captureNumericStart(step: TourStep): CapturedNumericStart {
     for (const k of Object.keys(step.optics) as NumericOpticsKeys[]) {
       if (NUMERIC_OPTICS_KEYS.has(k) && typeof optics[k] === 'number') {
         start.optics[k] = optics[k] as number;
+      }
+    }
+  }
+  if (step.shadows) {
+    for (const k of Object.keys(step.shadows) as NumericShadowKeys[]) {
+      if (NUMERIC_SHADOW_KEYS.has(k) && typeof shadows[k] === 'number') {
+        start.shadows[k] = shadows[k] as number;
+      }
+    }
+  }
+  if (step.textures) {
+    for (const k of Object.keys(step.textures) as NumericTextureKeys[]) {
+      if (NUMERIC_TEXTURE_KEYS.has(k) && typeof textures[k] === 'number') {
+        start.textures[k] = textures[k] as number;
       }
     }
   }
@@ -272,10 +318,36 @@ function applyNonNumericTargets(step: TourStep) {
     });
   }
 
-  if (Object.keys(pbrPatch).length > 0 || Object.keys(opticsPatch).length > 0) {
+  const shadowsPatch: Partial<ShadowsState> = {};
+  if (step.shadows) {
+    (Object.keys(step.shadows) as (keyof ShadowsState)[]).forEach((k) => {
+      if (!NUMERIC_SHADOW_KEYS.has(k as NumericShadowKeys)) {
+        (shadowsPatch as Record<string, unknown>)[k] = step.shadows![k];
+      }
+    });
+  }
+
+  const texturesPatch: Partial<TexturesState> = {};
+  if (step.textures) {
+    (Object.keys(step.textures) as (keyof TexturesState)[]).forEach((k) => {
+      if (!NUMERIC_TEXTURE_KEYS.has(k as NumericTextureKeys)) {
+        (texturesPatch as Record<string, unknown>)[k] = step.textures![k];
+      }
+    });
+  }
+
+  const anyChange =
+    Object.keys(pbrPatch).length > 0 ||
+    Object.keys(opticsPatch).length > 0 ||
+    Object.keys(shadowsPatch).length > 0 ||
+    Object.keys(texturesPatch).length > 0;
+
+  if (anyChange) {
     useAppStore.setState((s) => ({
       pbr: { ...s.pbr, ...pbrPatch },
       optics: { ...s.optics, ...opticsPatch },
+      shadows: { ...s.shadows, ...shadowsPatch },
+      textures: { ...s.textures, ...texturesPatch },
       lastUpdater: 'tour',
     }));
   }
@@ -288,8 +360,12 @@ function applyNumericInterpolated(
 ) {
   let pbrChanged = false;
   let opticsChanged = false;
+  let shadowsChanged = false;
+  let texturesChanged = false;
   const pbrPatch: Partial<PbrState> = {};
   const opticsPatch: Partial<OpticsState> = {};
+  const shadowsPatch: Partial<ShadowsState> = {};
+  const texturesPatch: Partial<TexturesState> = {};
 
   if (step.pbr) {
     for (const k of Object.keys(step.pbr) as NumericPbrKeys[]) {
@@ -313,11 +389,35 @@ function applyNumericInterpolated(
       opticsChanged = true;
     }
   }
+  if (step.shadows) {
+    for (const k of Object.keys(step.shadows) as NumericShadowKeys[]) {
+      if (!NUMERIC_SHADOW_KEYS.has(k)) continue;
+      const targetVal = step.shadows[k] as number;
+      const startVal = start.shadows[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (shadowsPatch as Record<string, unknown>)[k] = v;
+      shadowsChanged = true;
+    }
+  }
+  if (step.textures) {
+    for (const k of Object.keys(step.textures) as NumericTextureKeys[]) {
+      if (!NUMERIC_TEXTURE_KEYS.has(k)) continue;
+      const targetVal = step.textures[k] as number;
+      const startVal = start.textures[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (texturesPatch as Record<string, unknown>)[k] = v;
+      texturesChanged = true;
+    }
+  }
 
-  if (!pbrChanged && !opticsChanged) return;
+  if (!pbrChanged && !opticsChanged && !shadowsChanged && !texturesChanged) return;
   useAppStore.setState((s) => ({
     pbr: pbrChanged ? { ...s.pbr, ...pbrPatch } : s.pbr,
     optics: opticsChanged ? { ...s.optics, ...opticsPatch } : s.optics,
+    shadows: shadowsChanged ? { ...s.shadows, ...shadowsPatch } : s.shadows,
+    textures: texturesChanged ? { ...s.textures, ...texturesPatch } : s.textures,
     lastUpdater: 'tour',
   }));
 }
@@ -327,6 +427,8 @@ function applyStepToStore(step: TourStep) {
   applyNonNumericTargets(step);
   const pbrPatch: Partial<PbrState> = {};
   const opticsPatch: Partial<OpticsState> = {};
+  const shadowsPatch: Partial<ShadowsState> = {};
+  const texturesPatch: Partial<TexturesState> = {};
   if (step.pbr) {
     (Object.keys(step.pbr) as NumericPbrKeys[]).forEach((k) => {
       if (NUMERIC_PBR_KEYS.has(k)) {
@@ -341,9 +443,25 @@ function applyStepToStore(step: TourStep) {
       }
     });
   }
+  if (step.shadows) {
+    (Object.keys(step.shadows) as NumericShadowKeys[]).forEach((k) => {
+      if (NUMERIC_SHADOW_KEYS.has(k)) {
+        (shadowsPatch as Record<string, unknown>)[k] = step.shadows![k];
+      }
+    });
+  }
+  if (step.textures) {
+    (Object.keys(step.textures) as NumericTextureKeys[]).forEach((k) => {
+      if (NUMERIC_TEXTURE_KEYS.has(k)) {
+        (texturesPatch as Record<string, unknown>)[k] = step.textures![k];
+      }
+    });
+  }
   useAppStore.setState((s) => ({
     pbr: Object.keys(pbrPatch).length ? { ...s.pbr, ...pbrPatch } : s.pbr,
     optics: Object.keys(opticsPatch).length ? { ...s.optics, ...opticsPatch } : s.optics,
+    shadows: Object.keys(shadowsPatch).length ? { ...s.shadows, ...shadowsPatch } : s.shadows,
+    textures: Object.keys(texturesPatch).length ? { ...s.textures, ...texturesPatch } : s.textures,
     lastUpdater: 'tour',
   }));
 }

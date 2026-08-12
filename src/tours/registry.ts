@@ -2,12 +2,19 @@ import type { ModuleId } from '@/store';
 import type { Tour } from './types';
 import { PBR_TOURS } from './pbrTours';
 import { OPTICS_TOURS } from './opticsTours';
+import { SHADOW_TOURS } from './shadowTours';
+import { TEXTURE_TOURS } from './textureTours';
 
 /**
  * Tour catalog. New tours are registered here so the dropdown and
  * help-modal launchpad pick them up automatically.
  */
-export const ALL_TOURS: readonly Tour[] = [...PBR_TOURS, ...OPTICS_TOURS];
+export const ALL_TOURS: readonly Tour[] = [
+  ...PBR_TOURS,
+  ...OPTICS_TOURS,
+  ...SHADOW_TOURS,
+  ...TEXTURE_TOURS,
+];
 
 export function toursForModule(module: ModuleId): Tour[] {
   return ALL_TOURS.filter((t) => t.module === module);

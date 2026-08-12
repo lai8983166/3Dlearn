@@ -1,4 +1,4 @@
-import type { AppState } from '@/store';
+import type { AppState, ModuleId } from '@/store';
 
 /**
  * One-shot contextual hint. `condition` is checked against the live
@@ -9,7 +9,7 @@ import type { AppState } from '@/store';
  */
 export interface Hint {
   id: string;
-  appliesTo: 'pbr' | 'optics';
+  appliesTo: ModuleId;
   condition: (state: AppState) => boolean;
   message: string;
 }
@@ -60,6 +60,58 @@ export const HINTS: readonly Hint[] = [
     condition: (s) => s.pbr.specularModel === 'blinn-phong',
     message:
       'Blinn-Phong：经典高光模型，硬圆形，无能量守恒。切回 GGX 看柔和的物理正确 falloff。',
+  },
+  {
+    id: 'hint-shadow-bias-zero',
+    appliesTo: 'shadows',
+    condition: (s) => s.shadows.bias < EPS,
+    message:
+      'bias ≈ 0：看立方体和球表面的条纹——这就是 shadow acne。加 bias 到 0.001 左右让它消失。',
+  },
+  {
+    id: 'hint-shadow-low-res',
+    appliesTo: 'shadows',
+    condition: (s) => s.shadows.resolution === 256,
+    message:
+      '256×256：阴影边缘的锯齿清晰可见。左下角 shadow map 预览也明显块状。',
+  },
+  {
+    id: 'hint-shadow-low-angle',
+    appliesTo: 'shadows',
+    condition: (s) => s.shadows.lightPitch < 20,
+    message:
+      '低光源角度：阴影变长（傍晚效果），同时锯齿更明显——这是 perspective aliasing。',
+  },
+  {
+    id: 'hint-texture-nearest',
+    appliesTo: 'textures',
+    condition: (s) => s.textures.filterMode === 'nearest',
+    message:
+      'Nearest：每个像素取最近纹理像素。近处像素锯齿，远处会出现 moiré 闪烁。',
+  },
+  {
+    id: 'hint-texture-mipmap',
+    appliesTo: 'textures',
+    condition: (s) =>
+      s.textures.filterMode === 'mipmap-linear' ||
+      s.textures.filterMode === 'mipmap-nearest',
+    message:
+      'Mipmap 开启：远处自动用低分辨率版本。看斜视角远处的 checker——闪烁消失了。',
+  },
+  {
+    id: 'hint-texture-anisotropy-high',
+    appliesTo: 'textures',
+    condition: (s) => s.textures.anisotropy >= 8 - EPS,
+    message:
+      'Anisotropic ≥ 8：斜视角下远处 checker 依然清晰，不会被 Mipmap 过度模糊。',
+  },
+  {
+    id: 'hint-texture-mirror',
+    appliesTo: 'textures',
+    condition: (s) =>
+      s.textures.wrapping === 'mirror' && s.textures.tiling >= 2,
+    message:
+      'Mirror：相邻 tile 镜像翻转。看红色标记——每两格翻转方向。Mirror 用于避免重复纹理的可见接缝。',
   },
 ];
 

@@ -64,6 +64,42 @@ npm test
 - 切凹透镜 → 平行光经透镜后发散，反向延长线交于异侧焦点
 - 拖物体到 `u = 2f` → 像距 `v = 2f`、放大率 `m = -1`（倒立等大）
 
+### 阴影映射拆解
+
+方向光 + 立方体 + 球 + 地面。可调：
+
+- **Shadow Map 分辨率**：256 / 512 / 1024 / 2048
+- **Bias**：0 – 0.01（看 shadow acne / peter panning 权衡）
+- **PCF 软阴影**：None / 1×1 / 3×3 / 5×5
+- **光源 Yaw / Pitch**：低 pitch = 长阴影 + 明显锯齿
+
+画布左下角实时显示 shadow map（光源视角的深度图）。
+
+**教学要点验证**：
+- bias = 0 → 物体表面条纹状自阴影（acne）
+- bias > 0.008 → 物体与阴影脱离（peter panning）
+- PCF None → 5×5 → 硬阴影到软阴影过渡
+- 256 → 2048 → 阴影边缘锯齿消失
+
+### 纹理 / UV 教学
+
+倾斜平面 + 程序化 checkerboard 纹理。可调：
+
+- **过滤模式**：Nearest / Linear / Mipmap N / Mipmap L
+- **Anisotropic**：1 – 16（GPU 上限自动 clamp）
+- **Wrapping**：Repeat / Mirror / Clamp
+- **UV Tiling / Offset**
+- **Checker 单元数**：2 – 16
+- **UV 网格叠加**开关
+
+画布左下角实时显示 2D checker + UV 网格，与 3D 表面对应。
+
+**教学要点验证**：
+- Nearest → 像素锯齿；Mipmap Linear → 远处平滑无闪烁
+- Anisotropy 1 → 16 → 斜视角远处明显更清晰
+- Repeat → Mirror → 相邻 tile 是否翻转
+- 开 UV 网格 → 看到 3D 表面与 2D 纹理空间的映射关系
+
 ## 架构
 
 ```
@@ -142,7 +178,19 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 - **实像 → 虚像切换** — 5 步动画跨过焦点，看像距跳到无穷再切到虚像
 - **凹透镜发散** — 切凹透镜，平行光经透镜后发散
 
-### 5 个上下文提示（精准触发，每个用户最多看一次）
+**阴影模块（4 个）**：
+- **Shadow Map 是什么** — 可视化光源视角的深度图
+- **Shadow Acne 与 Bias** — bias 0 → 合适 → 过大，看三种状态
+- **硬阴影 vs 软阴影** — PCF None → 5×5 渐进
+- **分辨率与锯齿** — 256 → 2048 + 低光源角度
+
+**纹理模块（4 个）**：
+- **UV 是什么** — 开 UV 网格 + 角落预览，对照 3D 表面与 2D 纹理
+- **Nearest / Linear / Mipmap** — 三种过滤模式循环对比
+- **Anisotropic 提升** — 1 → 16 看斜视角远处清晰度
+- **Wrapping 对比** — Repeat / Mirror / Clamp 在 tiling=4 下
+
+### 11 个上下文提示（精准触发，每个用户最多看一次）
 
 走到以下状态时右下角弹 toast：
 
@@ -153,6 +201,13 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 | Metalness 拉到 1 | 金属：漫反射消失，反射被染色 |
 | 首次切到凹透镜 | f < 0，平行光发散 |
 | 首次切到 Blinn-Phong | 经典模型，无能量守恒 |
+| 阴影 bias ≈ 0 | 看 shadow acne，加 bias 到 0.001 消除 |
+| 阴影分辨率 = 256 | 边缘锯齿清晰可见 |
+| 阴影光源 pitch < 20° | 长阴影 + perspective aliasing |
+| 纹理过滤 = Nearest | 像素锯齿、远处 moiré 闪烁 |
+| 纹理过滤 = Mipmap | 远处自动平滑，闪烁消失 |
+| 纹理 Anisotropic ≥ 8 | 斜视角远处不被 Mipmap 过度模糊 |
+| 纹理 wrapping = Mirror | 相邻 tile 翻转方向 |
 
 看过的提示会进 localStorage，刷新后不再弹；可在帮助面板"重置提示"。
 
