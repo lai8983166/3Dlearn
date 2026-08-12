@@ -1,0 +1,98 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+    Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #0f1115;
+  color: #e4e6eb;
+  overflow: hidden;
+}
+
+/* Custom range slider */
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-runnable-track {
+  background: #3a3f4b;
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -6px;
+  background: #4ade80;
+  height: 16px;
+  width: 16px;
+  border-radius: 50%;
+}
+
+input[type='range']::-moz-range-track {
+  background: #3a3f4b;
+  height: 4px;
+  border-radius: 2px;
+}
+
+input[type='range']::-moz-range-thumb {
+  background: #4ade80;
+  height: 16px;
+  width: 16px;
+  border: none;
+  border-radius: 50%;
+}
+
+/* Custom checkbox */
+.layer-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.layer-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.layer-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: #3a3f4b;
+  border-radius: 20px;
+  transition: 0.2s;
+}
+
+.layer-toggle .slider::before {
+  content: '';
+  position: absolute;
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: 0.2s;
+}
+
+.layer-toggle input:checked + .slider {
+  background: #4ade80;
+}
+
+.layer-toggle input:checked + .slider::before {
+  transform: translateX(16px);
+}
