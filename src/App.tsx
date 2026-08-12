@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { RendererCanvas } from '@/three/RendererCanvas';
 import { PBRExplainerModule } from '@/scenes/pbr/PBRExplainerModule';
 import { OpticsModule } from '@/scenes/optics/OpticsModule';
@@ -6,6 +6,7 @@ import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
+import { HelpModal } from '@/ui/HelpModal';
 import { useAppStore } from '@/store';
 import type { SceneModule } from '@/three/SceneModule';
 import type { ModuleId } from '@/store';
@@ -13,6 +14,7 @@ import type { ModuleId } from '@/store';
 export default function App() {
   const activeModule = useAppStore((s) => s.activeModule);
   const setModule = useAppStore((s) => s.setModule);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   // Module instances are created on demand and replaced when the user
   // switches Tabs. RendererCanvas's moduleKey effect disposes the old
@@ -38,26 +40,36 @@ export default function App() {
               Interactive Optics & Shader Explainer
             </span>
           </div>
-          <nav className="flex gap-1 rounded bg-panel-light p-1">
-            {(
-              [
-                ['pbr', 'PBR Shader 拆解器'],
-                ['optics', '几何光学沙盒'],
-              ] as const
-            ).map(([id, label]) => (
-              <button
-                key={id}
-                onClick={() => setModule(id)}
-                className={`rounded px-3 py-1 text-xs transition ${
-                  activeModule === id
-                    ? 'bg-accent text-panel'
-                    : 'text-gray-300 hover:bg-panel'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <div className="flex items-center gap-2">
+            <nav className="flex gap-1 rounded bg-panel-light p-1">
+              {(
+                [
+                  ['pbr', 'PBR Shader 拆解器'],
+                  ['optics', '几何光学沙盒'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  onClick={() => setModule(id)}
+                  className={`rounded px-3 py-1 text-xs transition ${
+                    activeModule === id
+                      ? 'bg-accent text-panel'
+                      : 'text-gray-300 hover:bg-panel'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <button
+              onClick={() => setHelpOpen(true)}
+              aria-label="打开帮助"
+              title="帮助 (Help)"
+              className="flex h-7 w-7 items-center justify-center rounded-full border border-panel-light bg-panel-light text-xs text-gray-300 transition hover:bg-panel hover:text-white"
+            >
+              ?
+            </button>
+          </div>
         </header>
         <div className="flex flex-1 overflow-hidden">
           <aside className="flex w-80 shrink-0 flex-col gap-5 overflow-y-auto border-r border-panel-light bg-panel p-4">
@@ -75,6 +87,7 @@ export default function App() {
           </div>
         </div>
       </div>
+      {helpOpen && <HelpModal onClose={() => setHelpOpen(false)} />}
     </EnvironmentGuards>
   );
 }

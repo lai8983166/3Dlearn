@@ -7,6 +7,30 @@ export type SpecularModel = 'blinn-phong' | 'ggx';
 export type NormalMapPreset = 'smooth' | 'bricks' | 'hammered';
 export type LightSourceType = 'parallel' | 'point';
 
+/**
+ * Which subsystem currently owns the user's attention. Enforced as a
+ * single-writer: when any of these is active, contextual hints stay
+ * silent and tours block user input from racing with their animation.
+ *
+ *   'none'   — no teaching element active; normal interactive mode
+ *   'tour'   — a guided-tour scene is animating the store
+ *   'hint'   — a contextual-hint toast is showing (6s window)
+ *   'help'   — the help modal is open
+ */
+export type ActiveInterruption =
+  | { kind: 'none' }
+  | { kind: 'tour'; tourId: string }
+  | { kind: 'hint'; hintId: string }
+  | { kind: 'help' };
+
+/**
+ * Who last wrote to the store. The tour runner subscribes to store
+ * updates and bails out when it sees a 'user' update — that means the
+ * human grabbed a slider while the tour was animating. 'system' covers
+ * rehydration, internal sync, etc. that should NOT interrupt a tour.
+ */
+export type Updater = 'user' | 'tour' | 'system';
+
 export interface PbrState {
   layers: {
     diffuse: boolean;
@@ -57,11 +81,24 @@ interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
   optics: OpticsState;
+
+  /** Which teaching element (if any) currently owns attention. */
+  activeInterruption: ActiveInterruption;
+  /** Hint ids the user has already seen — used for one-shot de-dup. */
+  seenHints: string[];
+  /** Who last wrote to the store — used by the tour runner to detect
+   *  user interruption. */
+  lastUpdater: Updater;
+
   setModule: (id: ModuleId) => void;
   setPbr: <K extends keyof PbrState>(key: K, value: PbrState[K]) => void;
   toggleLayer: (layer: keyof PbrState['layers']) => void;
   setOptics: <K extends keyof OpticsState>(key: K, value: OpticsState[K]) => void;
   setHdriStatus: (status: HdriStatus) => void;
+
+  setActiveInterruption: (i: ActiveInterruption) => void;
+  markHintSeen: (hintId: string) => void;
+  resetHints: () => void;
 }
 
 function defaultFocalLength(lensType: LensType): number {
@@ -101,32 +138,57 @@ export const useAppStore = create<AppState>()(
         lightSourceType: 'parallel',
         rayCount: 7,
       },
-      setModule: (id) => set({ activeModule: id }),
+      activeInterruption: { kind: 'none' },
+      seenHints: [],
+      lastUpdater: 'system',
+
+      // Module-level state setters default to 'user' source — the tour
+      // runner uses its own setter that tags updates as 'tour'.
+      setModule: (id) => set({ activeModule: id, lastUpdater: 'user' }),
       setPbr: (key, value) =>
-        set((state) => ({ pbr: { ...state.pbr, [key]: value } })),
+        set((state) => ({
+          pbr: { ...state.pbr, [key]: value },
+          lastUpdater: 'user',
+        })),
       toggleLayer: (layer) =>
         set((state) => ({
           pbr: {
             ...state.pbr,
             layers: { ...state.pbr.layers, [layer]: !state.pbr.layers[layer] },
           },
+          lastUpdater: 'user',
         })),
       setOptics: (key, value) =>
-        set((state) => ({ optics: { ...state.optics, [key]: value } })),
+        set((state) => ({
+          optics: { ...state.optics, [key]: value },
+          lastUpdater: 'user',
+        })),
       setHdriStatus: (status) =>
-        set((state) => ({ pbr: { ...state.pbr, hdriStatus: status } })),
+        set((state) => ({
+          pbr: { ...state.pbr, hdriStatus: status },
+          lastUpdater: 'system',
+        })),
+
+      setActiveInterruption: (i) =>
+        set({ activeInterruption: i, lastUpdater: 'system' }),
+      markHintSeen: (hintId) =>
+        set((state) =>
+          state.seenHints.includes(hintId)
+            ? state
+            : { seenHints: [...state.seenHints, hintId], lastUpdater: 'system' },
+        ),
+      resetHints: () => set({ seenHints: [], lastUpdater: 'system' }),
     }),
     {
       name: '3dlearn-store',
       storage: createJSONStorage(() => localStorage),
-      version: 1,
-      // Persist only data, not transient status. hdriStatus is reset to
-      // idle on every reload so a half-finished download doesn't leave the
-      // picker stuck in a loading state.
+      version: 2,
       partialize: (state) => ({
         activeModule: state.activeModule,
         pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
         optics: state.optics,
+        seenHints: state.seenHints,
+        // activeInterruption and lastUpdater are runtime-only — never persist.
       }),
     },
   ),
