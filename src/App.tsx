@@ -5,11 +5,13 @@ import { OpticsModule } from '@/scenes/optics/OpticsModule';
 import { ShadowModule } from '@/scenes/shadows/ShadowModule';
 import { TextureModule } from '@/scenes/textures/TextureModule';
 import { TransformModule } from '@/scenes/transforms/TransformModule';
+import { ColorModule } from '@/scenes/colors/ColorModule';
 import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
 import { ShadowsPanel } from '@/ui/ShadowsPanel';
 import { TexturesPanel } from '@/ui/TexturesPanel';
 import { TransformsPanel } from '@/ui/TransformsPanel';
+import { ColorsPanel } from '@/ui/ColorsPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
@@ -116,11 +118,7 @@ export default function App() {
             {activeModule === 'shadows' && <ShadowsPanel />}
             {activeModule === 'textures' && <TexturesPanel />}
             {activeModule === 'transforms' && <TransformsPanel />}
-            {activeModule === 'colors' && (
-              <div className="rounded bg-panel-light p-3 text-xs text-gray-400">
-                色彩模块将在 Phase 2 接入。
-              </div>
-            )}
+            {activeModule === 'colors' && <ColorsPanel />}
           </aside>
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
@@ -147,6 +145,6 @@ function createModule(id: ModuleId): SceneModule {
     case 'transforms':
       return new TransformModule();
     case 'colors':
-      throw new Error('colors module not yet implemented');
+      return new ColorModule();
   }
 }
