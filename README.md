@@ -27,7 +27,7 @@ npm test
 
 技术栈：Vite + React 18 + TypeScript + Tailwind + Three.js (r165) + Zustand。无后端，纯静态托管。
 
-## 两个模块
+## 两个模块（9 个，2026-08 扩展）
 
 ### PBR Shader 拆解器
 
@@ -130,6 +130,65 @@ npm test
 - 切 ACES → 洋红色消失（高光被柔和压缩）
 - 关 gamma → 整体偏暗（典型的"为什么渲染看起来颜色错"）
 
+### 深度缓冲 / Z-Fighting
+
+两个几乎共面的三角形（红+绿）+ 立方体 + 球，演示 GPU 深度测试的所有关键开关。可调：
+
+- **depthFunc**：LESS（标准）/ EQUAL / ALWAYS（绘制顺序决定遮挡）
+- **depthWrite**：开/关（关闭后 mesh 不写入深度，类似透明物体）
+- **polygonOffsetFactor**：−5 ~ +5（仅作用于红色三角形，z-fighting 的工程修复）
+- **相机距离**：2 ~ 25（远距离 z-fighting 更严重）
+- **显示深度缓冲**：主视图变成灰度深度图（白=近、黑=远）
+- **反向 Z / logarithmic**：远距离精度大幅改善
+
+画布左下角实时显示深度缓冲缩略图（独立于主视图模式）。HUD 显示当前模式对应的深度映射公式（传统 Z 双曲线 vs logarithmic 近对数）。
+
+**教学要点验证**：
+- 共面三角形（offset=0）→ 红绿重叠区域条纹状闪烁
+- 拉远相机 → 闪烁加剧（远处精度密集在 0.99 附近）
+- 调 polygonOffsetFactor = +2 → 红三角稳定浮到前面
+- 切 depthFunc = ALWAYS → 立方体"穿过"球
+- 开 logarithmic → 远距离 z-fighting 几乎消失
+
+### Bloom / HDR Pipeline
+
+5 个 HDR 球被强光推到 >1.0。后处理 pipeline 完整拆开，每个 pass 可独立 toggle：
+
+1. **HDR Scene** — 渲染原始 3D 场景（半精度浮点 RT）
+2. **Bright Pass** — 阈值化提取亮区（带 soft knee 平滑过渡）
+3. **Blur Down** — 1/2 分辨率高斯模糊（代表下采样金字塔）
+4. **Blur Up** — 上采样回原始分辨率（额外 2 次 Gaussian 让边缘更柔）
+5. **Composite + Tonemap** — 把 blur 加回原图，最后 ACES tonemap
+
+画布右下角横向排列 5 个缩略图，实时显示每个 pass 的输出。点 pass 标签切换 HUD 公式（如 `bright = max(lum − threshold, 0)`）。
+
+**教学要点验证**：
+- 关 Bright Pass → 没东西被提取，blur 输入全黑
+- 调 threshold 1.5 → 0.3 → 看亮区范围扩大（过低则全图发光）
+- 关 Blur Down + Blur Up → 高光是硬边、没有晕染
+- 关 Composite（含 tonemap）→ 高光直接 clip 到纯白
+- 调 light intensity 0.5 → 8 → 看多少像素进入 HDR 范围
+
+### BRDF 模型对比
+
+一个球沿纵向切成 5 个扇区（"橘子瓣"），每个扇区用不同的 BRDF 模型——所有扇区共享同一组参数（roughness / albedo / 光源 / 视角），唯一差异是 BRDF 本身：
+
+| 扇区 | 模型 | 特征 |
+|---|---|---|
+| 1 | Lambert | 纯漫反射，无 roughness |
+| 2 | Phong | 经典 R·V，能量不守恒 |
+| 3 | Blinn-Phong | 半向量 N·H，位置正确 |
+| 4 | GGX | 物理基 microfacet，长尾 |
+| 5 | Oren-Nayar | 粗糙漫反射（V 形凹腔） |
+
+点击球的不同扇区选中（HUD 切换公式）；HUD 显示当前选中扇区的完整 BRDF 公式。
+
+**教学要点验证**：
+- 调 specular intensity > 1.5 → Phong 扇区烧死，GGX 守恒
+- 调 roughness 0.1 → 0.9 → GGX 高光斑变大，Oren-Nayar 变暗
+- 把 light pitch 调到 5° → 看 GGX 在球边缘的掠射高光（Fresnel 项）
+- roughness > 0.8 → Lambert vs Oren-Nayar 暗部差异明显
+
 ## 架构
 
 ```
@@ -140,16 +199,25 @@ src/
 │   └── RendererCanvas.tsx      React 包装，StrictMode 安全
 ├── scenes/
 │   ├── pbr/                    PBR 模块（分层 shader + 程序化法线贴图）
-│   └── optics/                 光学模块（透镜几何 + 光线绘制 + 物体拖拽）
+│   ├── optics/                 光学模块（透镜几何 + 光线绘制 + 物体拖拽）
+│   ├── shadows/                阴影映射（分辨率 / bias / PCF）
+│   ├── textures/               纹理 / UV（过滤 / anisotropic / wrapping）
+│   ├── transforms/             几何变换（TRS 矩阵 + 6 种顺序）
+│   ├── colors/                 色彩管线（tone mapping / exposure / gamma）
+│   ├── depth/                  深度缓冲（z-fighting / depthFunc / 反向 Z）
+│   ├── bloom/                  Bloom 后处理（5-pass HDR pipeline）
+│   └── brdf/                   BRDF 对比（5 扇区单 shader 多模型）
 ├── physics/
 │   ├── optics.ts               纯函数：薄透镜方程 + paraxial 折射
 │   └── optics.test.ts          11 个单元测试（Node --test）
+├── tours/                      演示场景（pbr/optics/shadows/textures/transforms/color/depth/bloom/brdf）
+├── hints/                      上下文提示（26 个，每个用户最多触发一次）
 ├── shared/
 │   ├── hdriCatalog.ts          5 个 HDRI 元数据
 │   ├── hdriCache.ts            IndexedDB 缓存
 │   └── loadHDRI.ts             fetch + 进度 + RGBE + PMREM
 ├── ui/                         React 控件（Slider / ColorInput / Panel / HUD / Picker / 错误边界）
-├── store.ts                    Zustand store（持久化到 localStorage）
+├── store.ts                    Zustand store（持久化到 localStorage v5）
 ├── App.tsx                     顶部 Tab + 模块路由
 └── main.tsx
 ```
@@ -174,7 +242,7 @@ src/
 
 ```bash
 npm test      # 11/11 通过（薄透镜方程边界、paraxial 折射规则、凹透镜、焦点奇点）
-npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
+npm run build # ~822 KB JS / 232 KB gzipped（几乎全是 Three.js）
 ```
 
 **手动验收清单**：
@@ -186,8 +254,17 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 - [ ] 光学：拖物体从 `u = 3f` 到 `u < f`，像距先移向无穷再切到虚像模式
 - [ ] 光学：切换凹透镜，平行光经透镜后发散，反向延长线交于异侧焦点
 - [ ] 光学：HUD 的 u/v/m 数值与肉眼观察的光路一致
-- [ ] 模块切换：PBR ↔ Optics 连续切 10 次，浏览器 DevTools Performance 无内存增长
-- [ ] 刷新页面：参数（layer toggles、focal length 等）从 localStorage 恢复
+- [ ] 深度：offset=0 + 远距离 → 共面三角形 z-fighting；调 offset=+2 解决
+- [ ] 深度：切 depthFunc=ALWAYS → 立方体"穿过"球
+- [ ] 深度：开 logarithmic → 远距离闪烁明显减少
+- [ ] Bloom：关 Bright Pass → blur 输入全黑
+- [ ] Bloom：调 threshold 1.5 → 0.3 → 看亮区扩大
+- [ ] Bloom：关 Composite（含 tonemap）→ 高光直接 clip 烧死
+- [ ] BRDF：5 个扇区高光形态明显不同
+- [ ] BRDF：调 specular intensity > 1.5 → Phong 烧死、GGX 守恒
+- [ ] BRDF：点击不同扇区 → HUD 公式切换
+- [ ] 模块切换：9 个模块连续切 10 次，浏览器 DevTools Performance 无内存增长
+- [ ] 刷新页面：参数（layer toggles、focal length、bloom threshold 等）从 localStorage 恢复
 
 ## 教学引导
 
@@ -232,7 +309,24 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 - **Exposure 调节** — -2 → +1.5 stops 看光线变化
 - **Linear vs sRGB** — 关 gamma 校正看错误输出
 
-### 18 个上下文提示（精准触发，每个用户最多看一次）
+**深度模块（3 个）**：
+- **Z-Fighting 重现与修复** — 共面三角形 + 远距离相机，看闪烁再用 polygonOffset 解决
+- **depthFunc 三档对比** — LESS → EQUAL → ALWAYS，看遮挡规则变化
+- **反向 Z / Logarithmic 对比** — 同位置下传统 Z vs logarithmic 的远距离精度差异
+
+**Bloom 模块（4 个）**：
+- **为什么需要 Bloom** — 对比有/无 bloom 的视觉差异
+- **Bright Pass 的作用** — threshold 1.5 → 0.3 看亮区提取范围
+- **Blur 金字塔** — 关 blur down/up 看高光从硬边变柔晕
+- **Tonemap 桥梁** — 关 composite 看高光被 clip
+
+**BRDF 模块（4 个）**：
+- **能量守恒对比** — Phong 烧死而 GGX 守恒
+- **Roughness 扫描** — 0.1 → 0.9 看 GGX 与 Oren-Nayar 的形态变化
+- **掠射角 Fresnel** — GGX 在边缘的高光强化对比
+- **Lambert vs Oren-Nayar** — 高粗糙度下两种漫反射的差异
+
+### 26 个上下文提示（精准触发，每个用户最多看一次）
 
 走到以下状态时右下角弹 toast：
 
@@ -256,6 +350,15 @@ npm run build # ~640 KB JS / 173 KB gzipped（几乎全是 Three.js）
 | Tone Mapping = None | HDR 像素被 clip 烧死 |
 | Exposure > +1.5 | 大量像素进入 HDR 范围 |
 | 关 Gamma 校正 | 场景变暗、中间调压缩 |
+| depthFunc = ALWAYS | 所有像素通过，绘制顺序决定遮挡 |
+| 关 depthWrite | mesh 不写入深度，后画的不知道前面画过什么 |
+| 远距离 + polygonOffset ≈ 0 | 严重 z-fighting；调 offset 到 +2 解决 |
+| Bloom threshold < 0.3 | 全图发光，提到 0.7–0.9 才合理 |
+| Bloom composite ≈ 0 | blur 不叠加回原图，等效关 bloom |
+| 关 Bloom composite（含 ACES） | HDR 直接 clip 烧死 |
+| BRDF specular intensity > 1.5 | Phong 烧死，GGX 守恒 |
+| BRDF roughness > 0.8 | Oren-Nayar 明显比 Lambert 暗 |
+| BRDF roughness < 0.3 | GGX 高光"尾巴"长（vs Blinn-Phong 短） |
 
 看过的提示会进 localStorage，刷新后不再弹；可在帮助面板"重置提示"。
 
@@ -276,11 +379,14 @@ openspec/specs/                          已完成并归档的 capability
 
 openspec/changes/
 ├── archive/2026-08-12-add-optics-shader-explainer/   已归档：PBR + 光学 + HDRI
-└── add-guided-learning/                               当前：教学引导层
+├── add-guided-learning/                               当前：教学引导层（tours / hints / help）
+├── add-shadows-and-textures/                         进行中（待归档）：阴影 + 纹理
+├── add-transform-and-color/                          进行中（待归档）：变换 + 色彩
+└── add-depth-bloom-brdf/                             当前：深度 + Bloom + BRDF（3 模块）
     ├── proposal.md         动机、目标、Non-goals
-    ├── design.md           注意力管理策略 + 6 个关键决策
-    ├── tasks.md            4 个 Phase 的实施清单
-    └── specs/              3 个 capability（tours / hints / help）
+    ├── design.md           6 个关键决策（log depth / 自建 Bloom / 5 扇区 shader）
+    ├── tasks.md            8 个 Phase 的实施清单
+    └── specs/              4 个 capability（3 新增 + scene-shell 修改）
 ```
 
 实施过程中的一些偏离（已记录在 commit message 中）：

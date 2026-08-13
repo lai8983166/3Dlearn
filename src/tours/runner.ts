@@ -6,6 +6,9 @@ import {
   type TexturesState,
   type TransformsState,
   type ColorsState,
+  type DepthState,
+  type BloomState,
+  type BrdfState,
 } from '@/store';
 import type { Tour, TourStep, NarrationState } from './types';
 
@@ -20,10 +23,13 @@ interface Snapshot {
   textures: TexturesState;
   transforms: TransformsState;
   colors: ColorsState;
+  depth: DepthState;
+  bloom: BloomState;
+  brdf: BrdfState;
 }
 
 function takeSnapshot(): Snapshot {
-  const { pbr, optics, shadows, textures, transforms, colors } = useAppStore.getState();
+  const { pbr, optics, shadows, textures, transforms, colors, depth, bloom, brdf } = useAppStore.getState();
   return {
     pbr: { ...pbr, layers: { ...pbr.layers } },
     optics: { ...optics },
@@ -36,6 +42,9 @@ function takeSnapshot(): Snapshot {
       scale: [transforms.scale[0], transforms.scale[1], transforms.scale[2]],
     },
     colors: { ...colors },
+    depth: { ...depth },
+    bloom: { ...bloom, layers: { ...bloom.layers } },
+    brdf: { ...brdf },
   };
 }
 
@@ -129,6 +138,9 @@ class TourRunner {
       textures: snap.textures,
       transforms: snap.transforms,
       colors: snap.colors,
+      depth: snap.depth,
+      bloom: snap.bloom,
+      brdf: snap.brdf,
       lastUpdater: 'tour',
       narration: null,
     });
@@ -240,6 +252,15 @@ type NumericTextureKeys = {
 type NumericColorKeys = {
   [K in keyof ColorsState]: ColorsState[K] extends number ? K : never;
 }[keyof ColorsState];
+type NumericDepthKeys = {
+  [K in keyof DepthState]: DepthState[K] extends number ? K : never;
+}[keyof DepthState];
+type NumericBloomKeys = {
+  [K in keyof BloomState]: BloomState[K] extends number ? K : never;
+}[keyof BloomState];
+type NumericBrdfKeys = {
+  [K in keyof BrdfState]: BrdfState[K] extends number ? K : never;
+}[keyof BrdfState];
 
 const NUMERIC_PBR_KEYS: ReadonlySet<NumericPbrKeys> = new Set([
   'diffuseIntensity',
@@ -269,6 +290,23 @@ const NUMERIC_TEXTURE_KEYS: ReadonlySet<NumericTextureKeys> = new Set([
 const NUMERIC_COLOR_KEYS: ReadonlySet<NumericColorKeys> = new Set([
   'exposure',
 ]);
+const NUMERIC_DEPTH_KEYS: ReadonlySet<NumericDepthKeys> = new Set([
+  'polygonOffsetFactor',
+  'cameraDistance',
+]);
+const NUMERIC_BLOOM_KEYS: ReadonlySet<NumericBloomKeys> = new Set([
+  'threshold',
+  'softKnee',
+  'blurRadius',
+  'compositeStrength',
+  'lightIntensity',
+]);
+const NUMERIC_BRDF_KEYS: ReadonlySet<NumericBrdfKeys> = new Set([
+  'roughness',
+  'lightYaw',
+  'lightPitch',
+  'specularIntensity',
+]);
 
 /**
  * Transforms tuple keys. translate/rotate/scale are arrays of three
@@ -292,17 +330,23 @@ interface CapturedNumericStart {
   shadows: Partial<Record<NumericShadowKeys, number>>;
   textures: Partial<Record<NumericTextureKeys, number>>;
   colors: Partial<Record<NumericColorKeys, number>>;
+  depth: Partial<Record<NumericDepthKeys, number>>;
+  bloom: Partial<Record<NumericBloomKeys, number>>;
+  brdf: Partial<Record<NumericBrdfKeys, number>>;
   transformsTuples: CapturedTupleStart;
 }
 
 function captureNumericStart(step: TourStep): CapturedNumericStart {
-  const { pbr, optics, shadows, textures, transforms, colors } = useAppStore.getState();
+  const { pbr, optics, shadows, textures, transforms, colors, depth, bloom, brdf } = useAppStore.getState();
   const start: CapturedNumericStart = {
     pbr: {},
     optics: {},
     shadows: {},
     textures: {},
     colors: {},
+    depth: {},
+    bloom: {},
+    brdf: {},
     transformsTuples: {},
   };
   if (step.pbr) {
@@ -337,6 +381,27 @@ function captureNumericStart(step: TourStep): CapturedNumericStart {
     for (const k of Object.keys(step.colors) as NumericColorKeys[]) {
       if (NUMERIC_COLOR_KEYS.has(k) && typeof colors[k] === 'number') {
         start.colors[k] = colors[k] as number;
+      }
+    }
+  }
+  if (step.depth) {
+    for (const k of Object.keys(step.depth) as NumericDepthKeys[]) {
+      if (NUMERIC_DEPTH_KEYS.has(k) && typeof depth[k] === 'number') {
+        start.depth[k] = depth[k] as number;
+      }
+    }
+  }
+  if (step.bloom) {
+    for (const k of Object.keys(step.bloom) as NumericBloomKeys[]) {
+      if (NUMERIC_BLOOM_KEYS.has(k) && typeof bloom[k] === 'number') {
+        start.bloom[k] = bloom[k] as number;
+      }
+    }
+  }
+  if (step.brdf) {
+    for (const k of Object.keys(step.brdf) as NumericBrdfKeys[]) {
+      if (NUMERIC_BRDF_KEYS.has(k) && typeof brdf[k] === 'number') {
+        start.brdf[k] = brdf[k] as number;
       }
     }
   }
@@ -415,13 +480,49 @@ function applyNonNumericTargets(step: TourStep) {
     });
   }
 
+  const depthPatch: Partial<DepthState> = {};
+  if (step.depth) {
+    (Object.keys(step.depth) as (keyof DepthState)[]).forEach((k) => {
+      if (!NUMERIC_DEPTH_KEYS.has(k as NumericDepthKeys)) {
+        (depthPatch as Record<string, unknown>)[k] = step.depth![k];
+      }
+    });
+  }
+
+  const bloomPatch: Partial<BloomState> = {};
+  if (step.bloom) {
+    (Object.keys(step.bloom) as (keyof BloomState)[]).forEach((k) => {
+      if (!NUMERIC_BLOOM_KEYS.has(k as NumericBloomKeys)) {
+        (bloomPatch as Record<string, unknown>)[k] = step.bloom![k];
+      }
+    });
+  }
+  if (step.bloomLayerToggles) {
+    bloomPatch.layers = {
+      ...useAppStore.getState().bloom.layers,
+      ...step.bloomLayerToggles,
+    };
+  }
+
+  const brdfPatch: Partial<BrdfState> = {};
+  if (step.brdf) {
+    (Object.keys(step.brdf) as (keyof BrdfState)[]).forEach((k) => {
+      if (!NUMERIC_BRDF_KEYS.has(k as NumericBrdfKeys)) {
+        (brdfPatch as Record<string, unknown>)[k] = step.brdf![k];
+      }
+    });
+  }
+
   const anyChange =
     Object.keys(pbrPatch).length > 0 ||
     Object.keys(opticsPatch).length > 0 ||
     Object.keys(shadowsPatch).length > 0 ||
     Object.keys(texturesPatch).length > 0 ||
     Object.keys(transformsPatch).length > 0 ||
-    Object.keys(colorsPatch).length > 0;
+    Object.keys(colorsPatch).length > 0 ||
+    Object.keys(depthPatch).length > 0 ||
+    Object.keys(bloomPatch).length > 0 ||
+    Object.keys(brdfPatch).length > 0;
 
   if (anyChange) {
     useAppStore.setState((s) => ({
@@ -431,6 +532,9 @@ function applyNonNumericTargets(step: TourStep) {
       textures: { ...s.textures, ...texturesPatch },
       transforms: { ...s.transforms, ...transformsPatch },
       colors: { ...s.colors, ...colorsPatch },
+      depth: { ...s.depth, ...depthPatch },
+      bloom: { ...s.bloom, ...bloomPatch },
+      brdf: { ...s.brdf, ...brdfPatch },
       lastUpdater: 'tour',
     }));
   }
@@ -446,12 +550,18 @@ function applyNumericInterpolated(
   let shadowsChanged = false;
   let texturesChanged = false;
   let colorsChanged = false;
+  let depthChanged = false;
+  let bloomChanged = false;
+  let brdfChanged = false;
   let transformsTupleChanged = false;
   const pbrPatch: Partial<PbrState> = {};
   const opticsPatch: Partial<OpticsState> = {};
   const shadowsPatch: Partial<ShadowsState> = {};
   const texturesPatch: Partial<TexturesState> = {};
   const colorsPatch: Partial<ColorsState> = {};
+  const depthPatch: Partial<DepthState> = {};
+  const bloomPatch: Partial<BloomState> = {};
+  const brdfPatch: Partial<BrdfState> = {};
   let transformsTuplePatch: Partial<Pick<TransformsState, 'translate' | 'rotate' | 'scale'>> = {};
 
   if (step.pbr) {
@@ -509,6 +619,39 @@ function applyNumericInterpolated(
       colorsChanged = true;
     }
   }
+  if (step.depth) {
+    for (const k of Object.keys(step.depth) as NumericDepthKeys[]) {
+      if (!NUMERIC_DEPTH_KEYS.has(k)) continue;
+      const targetVal = step.depth[k] as number;
+      const startVal = start.depth[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (depthPatch as Record<string, unknown>)[k] = v;
+      depthChanged = true;
+    }
+  }
+  if (step.bloom) {
+    for (const k of Object.keys(step.bloom) as NumericBloomKeys[]) {
+      if (!NUMERIC_BLOOM_KEYS.has(k)) continue;
+      const targetVal = step.bloom[k] as number;
+      const startVal = start.bloom[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (bloomPatch as Record<string, unknown>)[k] = v;
+      bloomChanged = true;
+    }
+  }
+  if (step.brdf) {
+    for (const k of Object.keys(step.brdf) as NumericBrdfKeys[]) {
+      if (!NUMERIC_BRDF_KEYS.has(k)) continue;
+      const targetVal = step.brdf[k] as number;
+      const startVal = start.brdf[k];
+      if (typeof startVal !== 'number') continue;
+      const v = startVal + (targetVal - startVal) * progress;
+      (brdfPatch as Record<string, unknown>)[k] = v;
+      brdfChanged = true;
+    }
+  }
   if (step.transforms) {
     for (const k of Object.keys(step.transforms) as ('translate' | 'rotate' | 'scale')[]) {
       if (!TUPLE_TRANSFORM_KEYS.has(k)) continue;
@@ -531,6 +674,9 @@ function applyNumericInterpolated(
     !shadowsChanged &&
     !texturesChanged &&
     !colorsChanged &&
+    !depthChanged &&
+    !bloomChanged &&
+    !brdfChanged &&
     !transformsTupleChanged
   ) {
     return;
@@ -541,6 +687,9 @@ function applyNumericInterpolated(
     shadows: shadowsChanged ? { ...s.shadows, ...shadowsPatch } : s.shadows,
     textures: texturesChanged ? { ...s.textures, ...texturesPatch } : s.textures,
     colors: colorsChanged ? { ...s.colors, ...colorsPatch } : s.colors,
+    depth: depthChanged ? { ...s.depth, ...depthPatch } : s.depth,
+    bloom: bloomChanged ? { ...s.bloom, ...bloomPatch } : s.bloom,
+    brdf: brdfChanged ? { ...s.brdf, ...brdfPatch } : s.brdf,
     transforms: transformsTupleChanged
       ? { ...s.transforms, ...transformsTuplePatch }
       : s.transforms,
@@ -556,6 +705,9 @@ function applyStepToStore(step: TourStep) {
   const shadowsPatch: Partial<ShadowsState> = {};
   const texturesPatch: Partial<TexturesState> = {};
   const colorsPatch: Partial<ColorsState> = {};
+  const depthPatch: Partial<DepthState> = {};
+  const bloomPatch: Partial<BloomState> = {};
+  const brdfPatch: Partial<BrdfState> = {};
   const transformsTuplePatch: Partial<TransformsState> = {};
   if (step.pbr) {
     (Object.keys(step.pbr) as NumericPbrKeys[]).forEach((k) => {
@@ -592,6 +744,27 @@ function applyStepToStore(step: TourStep) {
       }
     });
   }
+  if (step.depth) {
+    (Object.keys(step.depth) as NumericDepthKeys[]).forEach((k) => {
+      if (NUMERIC_DEPTH_KEYS.has(k)) {
+        (depthPatch as Record<string, unknown>)[k] = step.depth![k];
+      }
+    });
+  }
+  if (step.bloom) {
+    (Object.keys(step.bloom) as NumericBloomKeys[]).forEach((k) => {
+      if (NUMERIC_BLOOM_KEYS.has(k)) {
+        (bloomPatch as Record<string, unknown>)[k] = step.bloom![k];
+      }
+    });
+  }
+  if (step.brdf) {
+    (Object.keys(step.brdf) as NumericBrdfKeys[]).forEach((k) => {
+      if (NUMERIC_BRDF_KEYS.has(k)) {
+        (brdfPatch as Record<string, unknown>)[k] = step.brdf![k];
+      }
+    });
+  }
   if (step.transforms) {
     (Object.keys(step.transforms) as ('translate' | 'rotate' | 'scale')[]).forEach((k) => {
       if (TUPLE_TRANSFORM_KEYS.has(k)) {
@@ -612,6 +785,9 @@ function applyStepToStore(step: TourStep) {
     shadows: Object.keys(shadowsPatch).length ? { ...s.shadows, ...shadowsPatch } : s.shadows,
     textures: Object.keys(texturesPatch).length ? { ...s.textures, ...texturesPatch } : s.textures,
     colors: Object.keys(colorsPatch).length ? { ...s.colors, ...colorsPatch } : s.colors,
+    depth: Object.keys(depthPatch).length ? { ...s.depth, ...depthPatch } : s.depth,
+    bloom: Object.keys(bloomPatch).length ? { ...s.bloom, ...bloomPatch } : s.bloom,
+    brdf: Object.keys(brdfPatch).length ? { ...s.brdf, ...brdfPatch } : s.brdf,
     transforms: Object.keys(transformsTuplePatch).length
       ? { ...s.transforms, ...transformsTuplePatch }
       : s.transforms,

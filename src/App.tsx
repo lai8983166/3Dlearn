@@ -6,12 +6,18 @@ import { ShadowModule } from '@/scenes/shadows/ShadowModule';
 import { TextureModule } from '@/scenes/textures/TextureModule';
 import { TransformModule } from '@/scenes/transforms/TransformModule';
 import { ColorModule } from '@/scenes/colors/ColorModule';
+import { DepthModule } from '@/scenes/depth/DepthModule';
+import { BloomModule } from '@/scenes/bloom/BloomModule';
+import { BrdfModule } from '@/scenes/brdf/BrdfModule';
 import { PbrPanel } from '@/ui/PbrPanel';
 import { OpticsPanel } from '@/ui/OpticsPanel';
 import { ShadowsPanel } from '@/ui/ShadowsPanel';
 import { TexturesPanel } from '@/ui/TexturesPanel';
 import { TransformsPanel } from '@/ui/TransformsPanel';
 import { ColorsPanel } from '@/ui/ColorsPanel';
+import { DepthPanel } from '@/ui/DepthPanel';
+import { BloomPanel } from '@/ui/BloomPanel';
+import { BrdfPanel } from '@/ui/BrdfPanel';
 import { FormulaHud } from '@/ui/FormulaHud';
 import { EnvironmentGuards } from '@/ui/ErrorBoundaries';
 import { HelpModal } from '@/ui/HelpModal';
@@ -27,11 +33,22 @@ export default function App() {
   const activeModule = useAppStore((s) => s.activeModule);
   const setModule = useAppStore((s) => s.setModule);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [isWide, setIsWide] = useState(
+    typeof window !== 'undefined' ? window.innerWidth >= 1280 : true,
+  );
 
   // Module instances are created on demand and replaced when the user
   // switches Tabs. RendererCanvas's moduleKey effect disposes the old
   // module's GPU resources before initialising the new one.
   const module = useMemo<SceneModule>(() => createModule(activeModule), [activeModule]);
+
+  // Track viewport width so the tab bar collapses to a dropdown under 1280px.
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1280px)');
+    const onChange = () => setIsWide(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
 
   // Sanity log on module switch (visible in devtools console).
   useEffect(() => {
@@ -73,28 +90,33 @@ export default function App() {
           </div>
           <div className="flex items-center gap-2">
             <nav className="flex gap-1 rounded bg-panel-light p-1">
-              {(
-                [
-                  ['pbr', 'PBR'],
-                  ['optics', '光学'],
-                  ['shadows', '阴影'],
-                  ['textures', '纹理'],
-                  ['transforms', '变换'],
-                  ['colors', '色彩'],
-                ] as const
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setModule(id)}
-                  className={`rounded px-3 py-1 text-xs transition ${
-                    activeModule === id
-                      ? 'bg-accent text-panel'
-                      : 'text-gray-300 hover:bg-panel'
-                  }`}
+              {isWide ? (
+                MODULE_TABS.map(([id, label]) => (
+                  <button
+                    key={id}
+                    onClick={() => setModule(id)}
+                    className={`rounded px-2.5 py-1 text-xs transition ${
+                      activeModule === id
+                        ? 'bg-accent text-panel'
+                        : 'text-gray-300 hover:bg-panel'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))
+              ) : (
+                <select
+                  value={activeModule}
+                  onChange={(e) => setModule(e.target.value as ModuleId)}
+                  className="rounded bg-panel px-2 py-1 text-xs text-gray-100"
                 >
-                  {label}
-                </button>
-              ))}
+                  {MODULE_TABS.map(([id, label]) => (
+                    <option key={id} value={id}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              )}
             </nav>
             <button
               onClick={() => setHelpOpen(true)}
@@ -119,6 +141,24 @@ export default function App() {
             {activeModule === 'textures' && <TexturesPanel />}
             {activeModule === 'transforms' && <TransformsPanel />}
             {activeModule === 'colors' && <ColorsPanel />}
+            {activeModule === 'depth' && (
+              <>
+                <DepthPanel />
+                <FormulaHud />
+              </>
+            )}
+            {activeModule === 'bloom' && (
+              <>
+                <BloomPanel />
+                <FormulaHud />
+              </>
+            )}
+            {activeModule === 'brdf' && (
+              <>
+                <BrdfPanel />
+                <FormulaHud />
+              </>
+            )}
           </aside>
           <div className="relative flex-1">
             <RendererCanvas module={module} moduleKey={activeModule} />
@@ -131,6 +171,18 @@ export default function App() {
     </EnvironmentGuards>
   );
 }
+
+const MODULE_TABS: ReadonlyArray<[ModuleId, string]> = [
+  ['pbr', 'PBR'],
+  ['optics', '光学'],
+  ['shadows', '阴影'],
+  ['textures', '纹理'],
+  ['transforms', '变换'],
+  ['colors', '色彩'],
+  ['depth', '深度'],
+  ['bloom', 'Bloom'],
+  ['brdf', 'BRDF'],
+];
 
 function createModule(id: ModuleId): SceneModule {
   switch (id) {
@@ -146,5 +198,11 @@ function createModule(id: ModuleId): SceneModule {
       return new TransformModule();
     case 'colors':
       return new ColorModule();
+    case 'depth':
+      return new DepthModule();
+    case 'bloom':
+      return new BloomModule();
+    case 'brdf':
+      return new BrdfModule();
   }
 }

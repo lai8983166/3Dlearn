@@ -6,6 +6,9 @@ import type {
   TexturesState,
   TransformsState,
   ColorsState,
+  DepthState,
+  BloomState,
+  BrdfState,
 } from '@/store';
 
 /**
@@ -31,8 +34,16 @@ export interface TourStep {
   transforms?: Partial<TransformsState>;
   /** Colors state to drive toward. Numeric fields animate; others jump. */
   colors?: Partial<ColorsState>;
+  /** Depth module state. Numeric fields animate; others jump. */
+  depth?: Partial<DepthState>;
+  /** Bloom module state. Numeric fields animate; others jump. */
+  bloom?: Partial<BloomState>;
+  /** BRDF module state. Numeric fields animate; others jump. */
+  brdf?: Partial<BrdfState>;
   /** Layer toggles (within pbr.layers) to set. These jump, not animate. */
   layerToggles?: Partial<PbrState['layers']>;
+  /** Bloom layer toggles (within bloom.layers). These jump. */
+  bloomLayerToggles?: Partial<BloomState['layers']>;
   /** Per-step animation duration (ms). 0 = jump instantly. */
   durationMs: number;
   /** Narration shown in TourOverlay while this step runs. */

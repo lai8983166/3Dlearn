@@ -3,7 +3,16 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { LensType } from '@/physics/optics';
 import type { NarrationState } from '@/tours/types';
 
-export type ModuleId = 'pbr' | 'optics' | 'shadows' | 'textures' | 'transforms' | 'colors';
+export type ModuleId =
+  | 'pbr'
+  | 'optics'
+  | 'shadows'
+  | 'textures'
+  | 'transforms'
+  | 'colors'
+  | 'depth'
+  | 'bloom'
+  | 'brdf';
 export type SpecularModel = 'blinn-phong' | 'ggx';
 export type NormalMapPreset = 'smooth' | 'bricks' | 'hammered';
 export type LightSourceType = 'parallel' | 'point';
@@ -21,6 +30,24 @@ export type TextureFilterMode =
   | 'mipmap-nearest'
   | 'mipmap-linear';
 export type TextureWrapping = 'repeat' | 'mirror' | 'clamp';
+
+export type DepthFuncType = 'less' | 'equal' | 'always';
+
+/** Bloom pass identifiers — also used as tour/hint references. */
+export type BloomPassId =
+  | 'scene'
+  | 'bright'
+  | 'blurDown'
+  | 'blurUp'
+  | 'composite';
+
+/** BRDF sector identifiers — also selectedSector values. */
+export type BrdfModelId =
+  | 'lambert'
+  | 'phong'
+  | 'blinn-phong'
+  | 'ggx'
+  | 'oren-nayar';
 
 /**
  * Which subsystem currently owns the user's attention. Enforced as a
@@ -141,6 +168,55 @@ export interface ColorsState {
   showClipping: boolean;
 }
 
+export interface DepthState {
+  /** GL depth function. */
+  depthFunc: DepthFuncType;
+  /** Whether meshes write to the depth buffer. */
+  depthWrite: boolean;
+  /** Bias applied to one of the two coplanar triangles (z-fighting fix). */
+  polygonOffsetFactor: number;
+  /** Render the depth buffer as the main view (grayscale) instead of shaded. */
+  showDepthBuffer: boolean;
+  /** Use logarithmic depth (reverse-Z equivalent) for far-range precision. */
+  reversedZ: boolean;
+  /** Camera distance from origin — drives z-fighting intensity demo. */
+  cameraDistance: number;
+}
+
+export interface BloomState {
+  /** Per-pass toggle. When false, the pass is bypassed and downstream consumes the previous RT. */
+  layers: Record<BloomPassId, boolean>;
+  /** Bright-pass threshold (HDR luminance). */
+  threshold: number;
+  /** Soft knee for smooth threshold transition (0 = hard, 1 = max softness). */
+  softKnee: number;
+  /** Gaussian blur radius — controls downsample pyramid depth. */
+  blurRadius: number;
+  /** Composite strength — how strongly bloom adds back to the original scene. */
+  compositeStrength: number;
+  /** Light intensity multiplier — drives how many pixels enter HDR range. */
+  lightIntensity: number;
+  /** Currently-selected pass for HUD formula focus. */
+  activePassId: BloomPassId;
+}
+
+export interface BrdfState {
+  /** Shared roughness across all 5 sectors. */
+  roughness: number;
+  /** Shared albedo color (hex string). */
+  albedo: string;
+  /** Directional light horizontal angle in degrees. */
+  lightYaw: number;
+  /** Directional light vertical angle in degrees. */
+  lightPitch: number;
+  /** Specular intensity multiplier (Phong / Blinn-Phong / GGX). */
+  specularIntensity: number;
+  /** Show cos(N·L) and cos(N·H)^n curves overlay in canvas corner. */
+  showCosCurve: boolean;
+  /** Currently-selected sector for HUD formula focus. */
+  selectedSector: BrdfModelId;
+}
+
 export interface AppState {
   activeModule: ModuleId;
   pbr: PbrState;
@@ -149,6 +225,9 @@ export interface AppState {
   textures: TexturesState;
   transforms: TransformsState;
   colors: ColorsState;
+  depth: DepthState;
+  bloom: BloomState;
+  brdf: BrdfState;
 
   /** Which teaching element (if any) currently owns attention. */
   activeInterruption: ActiveInterruption;
@@ -168,6 +247,10 @@ export interface AppState {
   setTextures: <K extends keyof TexturesState>(key: K, value: TexturesState[K]) => void;
   setTransforms: <K extends keyof TransformsState>(key: K, value: TransformsState[K]) => void;
   setColors: <K extends keyof ColorsState>(key: K, value: ColorsState[K]) => void;
+  setDepth: <K extends keyof DepthState>(key: K, value: DepthState[K]) => void;
+  setBloom: <K extends keyof BloomState>(key: K, value: BloomState[K]) => void;
+  toggleBloomLayer: (layer: keyof BloomState['layers']) => void;
+  setBrdf: <K extends keyof BrdfState>(key: K, value: BrdfState[K]) => void;
   setHdriStatus: (status: HdriStatus) => void;
 
   setActiveInterruption: (i: ActiveInterruption) => void;
@@ -240,6 +323,38 @@ export const useAppStore = create<AppState>()(
         gammaCorrect: true,
         showClipping: false,
       },
+      depth: {
+        depthFunc: 'less',
+        depthWrite: true,
+        polygonOffsetFactor: 0,
+        showDepthBuffer: false,
+        reversedZ: false,
+        cameraDistance: 5,
+      },
+      bloom: {
+        layers: {
+          scene: true,
+          bright: true,
+          blurDown: true,
+          blurUp: true,
+          composite: true,
+        },
+        threshold: 0.8,
+        softKnee: 0.5,
+        blurRadius: 4,
+        compositeStrength: 1.0,
+        lightIntensity: 2.5,
+        activePassId: 'composite',
+      },
+      brdf: {
+        roughness: 0.5,
+        albedo: '#cccccc',
+        lightYaw: 30,
+        lightPitch: 35,
+        specularIntensity: 1.0,
+        showCosCurve: false,
+        selectedSector: 'ggx',
+      },
       activeInterruption: { kind: 'none' },
       seenHints: [],
       lastUpdater: 'system',
@@ -286,6 +401,29 @@ export const useAppStore = create<AppState>()(
           colors: { ...state.colors, [key]: value },
           lastUpdater: 'user',
         })),
+      setDepth: (key, value) =>
+        set((state) => ({
+          depth: { ...state.depth, [key]: value },
+          lastUpdater: 'user',
+        })),
+      setBloom: (key, value) =>
+        set((state) => ({
+          bloom: { ...state.bloom, [key]: value },
+          lastUpdater: 'user',
+        })),
+      toggleBloomLayer: (layer) =>
+        set((state) => ({
+          bloom: {
+            ...state.bloom,
+            layers: { ...state.bloom.layers, [layer]: !state.bloom.layers[layer] },
+          },
+          lastUpdater: 'user',
+        })),
+      setBrdf: (key, value) =>
+        set((state) => ({
+          brdf: { ...state.brdf, [key]: value },
+          lastUpdater: 'user',
+        })),
       setHdriStatus: (status) =>
         set((state) => ({
           pbr: { ...state.pbr, hdriStatus: status },
@@ -305,7 +443,7 @@ export const useAppStore = create<AppState>()(
     {
       name: '3dlearn-store',
       storage: createJSONStorage(() => localStorage),
-      version: 4,
+      version: 5,
       partialize: (state) => ({
         activeModule: state.activeModule,
         pbr: { ...state.pbr, hdriStatus: { state: 'idle' as const } },
@@ -314,9 +452,26 @@ export const useAppStore = create<AppState>()(
         textures: state.textures,
         transforms: state.transforms,
         colors: state.colors,
+        depth: state.depth,
+        bloom: { ...state.bloom, layers: { ...state.bloom.layers } },
+        brdf: state.brdf,
         seenHints: state.seenHints,
         // activeInterruption and lastUpdater are runtime-only — never persist.
       }),
+      migrate: (persistedState: any, version: number) => {
+        // v4 → v5: add depth/bloom/brdf slices with defaults; keep user state.
+        if (version < 5 && persistedState && typeof persistedState === 'object') {
+          const next = { ...(persistedState as Record<string, unknown>) };
+          // activeModule sanity: if it's a new module id keep it, else default.
+          // The new slices will fall back to the creator() defaults naturally
+          // because Zustand merge-strategy overlays persisted on top of fresh
+          // initial state — but if the persisted blob is from v4 it lacks the
+          // new keys, so we just leave them undefined here and let the
+          // creator's defaults win during rehydration.
+          return next;
+        }
+        return persistedState;
+      },
     },
   ),
 );

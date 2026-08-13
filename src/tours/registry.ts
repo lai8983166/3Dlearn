@@ -6,6 +6,9 @@ import { SHADOW_TOURS } from './shadowTours';
 import { TEXTURE_TOURS } from './textureTours';
 import { TRANSFORM_TOURS } from './transformTours';
 import { COLOR_TOURS } from './colorTours';
+import { DEPTH_TOURS } from './depthTours';
+import { BLOOM_TOURS } from './bloomTours';
+import { BRDF_TOURS } from './brdfTours';
 
 /**
  * Tour catalog. New tours are registered here so the dropdown and
@@ -18,6 +21,9 @@ export const ALL_TOURS: readonly Tour[] = [
   ...TEXTURE_TOURS,
   ...TRANSFORM_TOURS,
   ...COLOR_TOURS,
+  ...DEPTH_TOURS,
+  ...BLOOM_TOURS,
+  ...BRDF_TOURS,
 ];
 
 export function toursForModule(module: ModuleId): Tour[] {

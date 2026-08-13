@@ -159,6 +159,70 @@ export const HINTS: readonly Hint[] = [
     message:
       'Gamma 校正关了：场景变暗、中间调压缩。这是"为什么我的渲染看起来颜色错"的最常见原因。',
   },
+  {
+    id: 'hint-depth-func-always',
+    appliesTo: 'depth',
+    condition: (s) => s.depth.depthFunc === 'always',
+    message:
+      'depthFunc = ALWAYS：所有像素通过测试。绘制顺序决定遮挡——立方体"穿过"球。',
+  },
+  {
+    id: 'hint-depth-write-off',
+    appliesTo: 'depth',
+    condition: (s) => !s.depth.depthWrite,
+    message:
+      'depthWrite 关闭：mesh 不写入深度缓冲。后画的不知道前面画过什么——透明物体常用这个。',
+  },
+  {
+    id: 'hint-depth-zfighting',
+    appliesTo: 'depth',
+    condition: (s) =>
+      Math.abs(s.depth.polygonOffsetFactor) < 0.1 && s.depth.cameraDistance > 8,
+    message:
+      '远距离 + polygonOffset = 0 → 严重 z-fighting。调 polygonOffsetFactor 到 +2 让一个三角形稳定浮到前面。',
+  },
+  {
+    id: 'hint-bloom-threshold-too-low',
+    appliesTo: 'bloom',
+    condition: (s) => s.bloom.threshold < 0.3 + EPS,
+    message:
+      'threshold < 0.3：太多像素进入 bright pass，全图发光。提到 0.7–0.9 才合理。',
+  },
+  {
+    id: 'hint-bloom-composite-zero',
+    appliesTo: 'bloom',
+    condition: (s) => s.bloom.compositeStrength < 0.05,
+    message:
+      'composite strength ≈ 0：blur 结果不叠加到原图。等效于关掉 bloom。',
+  },
+  {
+    id: 'hint-bloom-no-tonemap',
+    appliesTo: 'bloom',
+    condition: (s) => !s.bloom.layers.composite,
+    message:
+      '关掉 composite pass（含 ACES）：HDR 值直接 clip 到 1.0，亮的全是纯白。这就是为什么 HDR pipeline 必须 tonemap。',
+  },
+  {
+    id: 'hint-brdf-phong-no-conservation',
+    appliesTo: 'brdf',
+    condition: (s) => s.brdf.specularIntensity > 1.5 + EPS,
+    message:
+      'specular intensity > 1.5：Phong 扇区会"烧死"——它不守恒能量。看 GGX 扇区依然合理。',
+  },
+  {
+    id: 'hint-brdf-oren-nayar-roughness',
+    appliesTo: 'brdf',
+    condition: (s) => s.brdf.roughness > 0.8 - EPS,
+    message:
+      'roughness > 0.8：Oren-Nayar 扇区明显比 Lambert 暗——它把表面当 V 形凹腔，更接近粉笔、泥土的真实表现。',
+  },
+  {
+    id: 'hint-brdf-ggx-tail',
+    appliesTo: 'brdf',
+    condition: (s) => s.brdf.roughness < 0.3 + EPS,
+    message:
+      'roughness < 0.3：GGX 扇区的高光"尾巴"很长（光斑周围有柔和过渡）——这是它比 Blinn-Phong 更物理正确的关键特征。',
+  },
 ];
 
 export const TOTAL_HINTS = HINTS.length;

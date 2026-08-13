@@ -99,4 +99,48 @@ export const HELP_CONTENT: Record<ModuleId, HelpContent> = {
       '开"显示被 clip 的像素" → 洋红色覆盖任何 >1.0 的 HDR 像素，切 ACES 看它们消失',
     ],
   },
+  depth: {
+    title: '深度缓冲 / Z-Fighting',
+    concept:
+      'GPU 每片元都有一个深度值（z），深度测试决定哪个片元画到屏幕。共面三角形会' +
+      '因为精度不足而闪烁（z-fighting）。传统 Z 的深度分布在 [0,1] 上严重不均——' +
+      '远处精度密集在 0.99 附近，所以远距离的 z-fighting 比近距离明显得多。' +
+      '反向 Z / logarithmic depth 把分布变得近对数，远距离精度大幅提升。',
+    operations: [
+      '调 polygonOffsetFactor = 0 看 z-fighting，调到 +2 看一个三角形稳定地浮到前面',
+      '切 depthFunc LESS → ALWAYS → 看绘制顺序如何取代深度测试决定遮挡',
+      '关 depthWrite → 后画的不知道前面画过什么，产生混乱遮挡',
+      '切"显示深度缓冲" → 主视图变成灰度深度图（白=近、黑=远）',
+      '开"反向 Z (logarithmic)" → 远距离 z-fighting 闪烁明显减少',
+    ],
+  },
+  bloom: {
+    title: 'Bloom / HDR Pipeline',
+    concept:
+      'Bloom 是"高光晕染"——亮的地方渗到周围。引擎面板只能开/关，但内部有 5 个 pass：' +
+      'HDR Scene → Bright Pass（提取亮区）→ Blur Down（下采样金字塔）→ Blur Up（上采样累加）' +
+      '→ Composite + Tonemap。每个 pass 都可以独立 toggle，关掉立即看到它对最终结果的贡献消失。' +
+      '画布右下角实时显示每个中间 pass 的缩略图。',
+    operations: [
+      '关 Bright Pass → 没东西被提取，blur 输入全黑，bloom 消失',
+      '调 Threshold 1.5 → 0.3 → 看亮区范围如何扩大（过低则全图发光）',
+      '关 Composite → blur 不叠加回原图，只剩原始 HDR 场景',
+      '关 Composite 的 tonemap → 高光被 clip 烧死（显示器无法表达 HDR）',
+      '点 pass 标签 → HUD 公式切换到对应 pass 的公式',
+    ],
+  },
+  brdf: {
+    title: 'BRDF 模型对比',
+    concept:
+      '一个球被切成 5 个扇区，每个扇区用不同的 BRDF：Lambert（纯漫反射）/ Phong（不守恒）' +
+      '/ Blinn-Phong（半向量）/ GGX（物理基）/ Oren-Nayar（粗糙漫反射）。同 roughness、' +
+      '同光源、同视角——肉眼直接对比高光形态、能量守恒、暗部表现。',
+    operations: [
+      '调 Roughness 0.1 → 0.9 → 看 GGX 的高光斑如何变大、Oren-Nayar 如何变暗',
+      '调 Specular Intensity > 1.5 → 看 Phong 烧死而 GGX 守恒',
+      '点球的不同扇区 → HUD 切换到对应 BRDF 公式',
+      '开"显示 cos 曲线" → 角落画 N·L 和 (N·H)^n 随角度的曲线',
+      '旋转 Light Yaw → 5 个扇区同步移动高光',
+    ],
+  },
 };
